@@ -1,13 +1,21 @@
 import { useDroppable } from '@dnd-kit/core'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Check } from 'lucide-react'
 
 import { type PlannerDragItem } from '../../domain/schedule/dnd.ts'
-import { selectUnscheduledTaskIds } from '../../domain/schedule/selectors.ts'
+import { selectUnscheduledNeedCardIds } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
 import {
-  isTaskSelection,
+  isNeedCardSelection,
   type PlannerSelection,
 } from '../layout/plannerSelection.ts'
+import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
+import {
+  getReceiveAnimation,
+  getTargetActivationAnimation,
+  plannerPulseTransition,
+  plannerTargetSpring,
+} from '../motion/plannerMotion.ts'
 import { useSchedule } from '../schedule/useSchedule.ts'
 import { PanelFrame } from '../shared/PanelFrame.tsx'
 import { TaskCard } from '../shared/TaskCard.tsx'
@@ -16,64 +24,90 @@ type TasksPanelProps = {
   activeDrag: PlannerDragItem | null
   selection: PlannerSelection | null
   onOpenSelection: (selection: PlannerSelection) => void
-  onSuppressSelection: () => void
 }
 
 export function TasksPanel({
   activeDrag,
   selection,
   onOpenSelection,
-  onSuppressSelection,
 }: TasksPanelProps) {
   const { state } = useSchedule()
-  const taskIds = selectUnscheduledTaskIds(state)
+  const reduceMotion = useReducedMotion() ?? false
+  const { recentEvent } = usePlannerDragFeedback()
+  const cardIds = selectUnscheduledNeedCardIds(state)
+  const isEmpty = cardIds.length === 0
+  const useCompactDensity = cardIds.length > 5
   const { isOver, setNodeRef } = useDroppable({
-    id: 'task-inventory',
+    id: 'unscheduled-panel',
     data: {
-      type: 'task-inventory',
+      type: 'unscheduled-panel',
     },
   })
+  const isReceivingReturnedCard = recentEvent?.type === 'moveNeedCardToUnscheduled'
 
   return (
     <PanelFrame
-      title="Fagkort"
-      kicker={null}
-      tilt="left"
-      className="overflow-hidden"
+      title="Uplanlagt"
+      tooltip="Kort som venter på å bli lagt inn i planen."
+      meta={<span className="panel-count">{cardIds.length}</span>}
+      tone="neutral"
+      headerStyle="split"
+      className="order-2 xl:order-1"
     >
-      <div
+      <motion.div
         ref={setNodeRef}
+        animate={
+          isReceivingReturnedCard
+            ? getReceiveAnimation('card', true, reduceMotion)
+            : getTargetActivationAnimation(
+                'cell',
+                {
+                  ready: activeDrag?.type === 'need-card',
+                  active: activeDrag?.type === 'need-card' && isOver,
+                },
+                reduceMotion,
+              )
+        }
+        transition={isReceivingReturnedCard ? plannerPulseTransition : plannerTargetSpring}
         className={cx(
-          'inventory-dropzone flex-1 overflow-hidden',
-          activeDrag?.type === 'task' && isOver && 'drop-target-valid',
+          'panel-dropzone panel-dropzone--unscheduled flex-1 overflow-hidden',
+          isEmpty && 'panel-dropzone--quiet',
+          activeDrag?.type === 'need-card' && isOver && 'drop-target-valid',
         )}
+        title="Dra et kort hit for å sende det tilbake til verktøyfeltet"
       >
-        <div className="inventory-scroll flex max-h-[34rem] flex-col gap-3 overflow-y-auto pr-1">
-          {taskIds.length > 0 ? (
-            taskIds.map((taskId) => (
+        <div
+          className={cx(
+            'panel-scroll flex flex-col gap-2',
+            useCompactDensity && 'panel-scroll--compact',
+          )}
+        >
+          {!isEmpty ? (
+            cardIds.map((cardId) => (
               <TaskCard
-                key={taskId}
-                task={state.tasks[taskId]}
+                key={cardId}
+                card={state.needCards[cardId]}
                 activeDrag={activeDrag}
-                isSelected={isTaskSelection(selection, taskId)}
+                isSelected={isNeedCardSelection(selection, cardId)}
                 onOpenDetails={onOpenSelection}
-                onSuppressSelection={onSuppressSelection}
+                variant="panel"
               />
             ))
           ) : (
             <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="empty-panel-state"
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="empty-panel-state empty-panel-state--quiet"
             >
-              <p className="scribble-label text-[1.2rem]">Alle fag er planlagt</p>
-              <p className="mt-2 text-[0.95rem] text-[color:var(--foreground-soft)]">
-                Dra et kort tilbake hit hvis planen endrer seg.
-              </p>
+              <span className="empty-panel-state__icon" aria-hidden="true">
+                <Check size={15} strokeWidth={2.5} />
+              </span>
+              <p className="empty-panel-state__title">Alt er planlagt</p>
             </motion.div>
           )}
         </div>
-      </div>
+      </motion.div>
     </PanelFrame>
   )
 }

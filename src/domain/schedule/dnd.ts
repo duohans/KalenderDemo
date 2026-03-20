@@ -6,51 +6,51 @@ import {
   type Over,
 } from '@dnd-kit/core'
 
-import { selectCanAssignPersonToTask, selectCanDropTaskInCell } from './selectors.ts'
-import type { PlannerAction, PlannerState, Task, TimeKey } from './types.ts'
+import { selectCanDropNeedCardInCell } from './selectors.ts'
+import type { NeedCard, PlannerAction, PlannerState, TimeBlockId } from './types.ts'
 
-export type PlannerTaskDragItem = {
-  type: 'task'
-  taskId: string
+export type PlannerNeedCardDragItem = {
+  type: 'need-card'
+  cardId: string
   from:
-    | { type: 'task-inventory' }
-    | { type: 'calendar-cell'; rowId: string; timeKey: TimeKey }
+    | { type: 'unscheduled-panel' }
+    | { type: 'calendar-cell'; rowId: string; timeBlockId: TimeBlockId }
 }
 
-export type PlannerPersonDragItem = {
-  type: 'person'
-  personId: string
-  from: { type: 'people-inventory' }
+export type PlannerSubstituteDragItem = {
+  type: 'substitute'
+  substituteId: string
+  from: { type: 'substitute-pool' }
 }
 
-export type PlannerDragItem = PlannerTaskDragItem | PlannerPersonDragItem
+export type PlannerDragItem = PlannerNeedCardDragItem | PlannerSubstituteDragItem
 
 export type PlannerDropTarget =
-  | { type: 'task-inventory' }
-  | { type: 'calendar-cell'; rowId: string; timeKey: TimeKey }
+  | { type: 'unscheduled-panel' }
+  | { type: 'calendar-cell'; rowId: string; timeBlockId: TimeBlockId }
   | { type: 'row-header'; rowId: string }
-  | { type: 'task-card'; taskId: string }
+  | { type: 'need-card'; cardId: string }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-export function createTaskDragItem(task: Task): PlannerTaskDragItem {
-  if (task.location.kind === 'inventory') {
+export function createNeedCardDragItem(card: NeedCard): PlannerNeedCardDragItem {
+  if (card.placement === 'unscheduled' || !card.rowId || !card.timeBlockId) {
     return {
-      type: 'task',
-      taskId: task.id,
-      from: { type: 'task-inventory' },
+      type: 'need-card',
+      cardId: card.id,
+      from: { type: 'unscheduled-panel' },
     }
   }
 
   return {
-    type: 'task',
-    taskId: task.id,
+    type: 'need-card',
+    cardId: card.id,
     from: {
       type: 'calendar-cell',
-      rowId: task.location.rowId,
-      timeKey: task.location.timeKey,
+      rowId: card.rowId,
+      timeBlockId: card.timeBlockId,
     },
   }
 }
@@ -60,12 +60,12 @@ export function isPlannerDragItem(value: unknown): value is PlannerDragItem {
     return false
   }
 
-  if (value.type === 'task') {
-    return typeof value.taskId === 'string'
+  if (value.type === 'need-card') {
+    return typeof value.cardId === 'string'
   }
 
-  if (value.type === 'person') {
-    return typeof value.personId === 'string'
+  if (value.type === 'substitute') {
+    return typeof value.substituteId === 'string'
   }
 
   return false
@@ -77,14 +77,14 @@ export function isPlannerDropTarget(value: unknown): value is PlannerDropTarget 
   }
 
   switch (value.type) {
-    case 'task-inventory':
+    case 'unscheduled-panel':
       return true
     case 'calendar-cell':
-      return typeof value.rowId === 'string' && typeof value.timeKey === 'string'
+      return typeof value.rowId === 'string' && typeof value.timeBlockId === 'string'
     case 'row-header':
       return typeof value.rowId === 'string'
-    case 'task-card':
-      return typeof value.taskId === 'string'
+    case 'need-card':
+      return typeof value.cardId === 'string'
     default:
       return false
   }
@@ -114,11 +114,11 @@ export const plannerCollisionDetection: CollisionDetection = (args) => {
       return false
     }
 
-    if (activeItem.type === 'task') {
-      return current.type === 'task-inventory' || current.type === 'calendar-cell'
+    if (activeItem.type === 'need-card') {
+      return current.type === 'unscheduled-panel' || current.type === 'calendar-cell'
     }
 
-    return current.type === 'row-header' || current.type === 'task-card'
+    return current.type === 'row-header' || current.type === 'need-card'
   })
 
   const nextArgs = { ...args, droppableContainers }
@@ -132,17 +132,17 @@ export function canDropOnTarget(
   activeItem: PlannerDragItem,
   target: PlannerDropTarget,
 ) {
-  if (activeItem.type === 'task') {
-    if (target.type === 'task-inventory') {
-      return Boolean(state.tasks[activeItem.taskId])
+  if (activeItem.type === 'need-card') {
+    if (target.type === 'unscheduled-panel') {
+      return Boolean(state.needCards[activeItem.cardId])
     }
 
     if (target.type === 'calendar-cell') {
-      return selectCanDropTaskInCell(
+      return selectCanDropNeedCardInCell(
         state,
-        activeItem.taskId,
+        activeItem.cardId,
         target.rowId,
-        target.timeKey,
+        target.timeBlockId,
       )
     }
 
@@ -150,11 +150,15 @@ export function canDropOnTarget(
   }
 
   if (target.type === 'row-header') {
-    return Boolean(state.rows[target.rowId] && state.people[activeItem.personId])
+    return Boolean(
+      state.rows[target.rowId] && state.substitutes[activeItem.substituteId],
+    )
   }
 
-  if (target.type === 'task-card') {
-    return selectCanAssignPersonToTask(state, target.taskId)
+  if (target.type === 'need-card') {
+    return Boolean(
+      state.needCards[target.cardId] && state.substitutes[activeItem.substituteId],
+    )
   }
 
   return false
@@ -169,20 +173,20 @@ export function resolveDrop(
     return null
   }
 
-  if (activeItem.type === 'task') {
-    if (target.type === 'task-inventory') {
+  if (activeItem.type === 'need-card') {
+    if (target.type === 'unscheduled-panel') {
       return {
-        type: 'moveTaskToInventory',
-        taskId: activeItem.taskId,
+        type: 'moveNeedCardToUnscheduled',
+        cardId: activeItem.cardId,
       }
     }
 
     if (target.type === 'calendar-cell') {
       return {
-        type: 'moveTaskToCell',
-        taskId: activeItem.taskId,
+        type: 'moveNeedCardToCell',
+        cardId: activeItem.cardId,
         rowId: target.rowId,
-        timeKey: target.timeKey,
+        timeBlockId: target.timeBlockId,
       }
     }
 
@@ -191,17 +195,17 @@ export function resolveDrop(
 
   if (target.type === 'row-header') {
     return {
-      type: 'assignPersonToRow',
+      type: 'assignSubstituteToRow',
       rowId: target.rowId,
-      personId: activeItem.personId,
+      substituteId: activeItem.substituteId,
     }
   }
 
-  if (target.type === 'task-card') {
+  if (target.type === 'need-card') {
     return {
-      type: 'assignPersonToTask',
-      taskId: target.taskId,
-      personId: activeItem.personId,
+      type: 'assignSubstituteToNeedCard',
+      cardId: target.cardId,
+      substituteId: activeItem.substituteId,
     }
   }
 

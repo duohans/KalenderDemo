@@ -5,8 +5,10 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import { useReducedMotion } from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 
 import {
@@ -16,30 +18,42 @@ import {
   resolveDrop,
   type PlannerDragItem,
 } from '../../domain/schedule/dnd.ts'
+import {
+  actionToDropHandoff,
+  actionToMotionEvent,
+  type PlannerDropHandoffBase,
+  type PlannerDropHandoff,
+  PlannerDragFeedbackProvider,
+  type PlannerMotionEventBase,
+  type PlannerMotionEvent,
+  type RejectedDrag,
+} from '../motion/PlannerDragFeedbackContext.tsx'
 import { useSchedule } from '../schedule/useSchedule.ts'
 import { CalendarGrid } from '../calendar/CalendarGrid.tsx'
 import type { PlannerSelection } from './plannerSelection.ts'
+import {
+  getPlannerDropAnimation,
+  getPlannerDropHandoffDuration,
+} from '../motion/plannerMotion.ts'
 import { PeoplePanel } from '../people/PeoplePanel.tsx'
 import { DragOverlayCard } from '../shared/DragOverlayCard.tsx'
 import { TasksPanel } from '../tasks/TasksPanel.tsx'
-
-type RowAssignmentTransition = {
-  kind: 'assign' | 'clear'
-  personId: string
-  key: number
-}
 
 export function PlannerPage() {
   const { state, dispatch } = useSchedule()
   const [activeDrag, setActiveDrag] = useState<PlannerDragItem | null>(null)
   const [selection, setSelection] = useState<PlannerSelection | null>(null)
-  const [rowAssignmentTransitions, setRowAssignmentTransitions] = useState<
-    Record<string, RowAssignmentTransition>
-  >({})
-  const suppressSelectionRef = useRef(false)
-  const selectionResetTimerRef = useRef<number | null>(null)
-  const rowTransitionTimeoutsRef = useRef<Record<string, number>>({})
-  const rowTransitionSequenceRef = useRef(0)
+  const [dragVector, setDragVector] = useState({ x: 0, y: 0 })
+  const [overlaySize, setOverlaySize] = useState<{ width: number; height: number } | null>(null)
+  const [dropAnimationKind, setDropAnimationKind] = useState<'valid' | 'invalid'>('valid')
+  const [dropHandoff, setDropHandoff] = useState<PlannerDropHandoff | null>(null)
+  const [recentEvent, setRecentEvent] = useState<PlannerMotionEvent | null>(null)
+  const [rejectedDrag, setRejectedDrag] = useState<RejectedDrag | null>(null)
+  const feedbackSequenceRef = useRef(0)
+  const dropHandoffTimerRef = useRef<number | null>(null)
+  const recentEventTimerRef = useRef<number | null>(null)
+  const rejectedDragTimerRef = useRef<number | null>(null)
+  const reduceMotion = useReducedMotion() ?? false
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -47,151 +61,200 @@ export function PlannerPage() {
   )
 
   useEffect(() => {
-    const rowTransitionTimeouts = rowTransitionTimeoutsRef.current
-
     return () => {
-      if (selectionResetTimerRef.current !== null) {
-        window.clearTimeout(selectionResetTimerRef.current)
+      if (dropHandoffTimerRef.current !== null) {
+        window.clearTimeout(dropHandoffTimerRef.current)
       }
 
-      Object.values(rowTransitionTimeouts).forEach((timeoutId) => {
-        window.clearTimeout(timeoutId)
-      })
+      if (recentEventTimerRef.current !== null) {
+        window.clearTimeout(recentEventTimerRef.current)
+      }
+
+      if (rejectedDragTimerRef.current !== null) {
+        window.clearTimeout(rejectedDragTimerRef.current)
+      }
     }
   }, [])
 
-  const suppressSelectionTemporarily = (duration = 140) => {
-    suppressSelectionRef.current = true
-
-    if (selectionResetTimerRef.current !== null) {
-      window.clearTimeout(selectionResetTimerRef.current)
+  const clearDropHandoff = () => {
+    if (dropHandoffTimerRef.current !== null) {
+      window.clearTimeout(dropHandoffTimerRef.current)
+      dropHandoffTimerRef.current = null
     }
 
-    selectionResetTimerRef.current = window.setTimeout(() => {
-      suppressSelectionRef.current = false
-      selectionResetTimerRef.current = null
-    }, duration)
+    setDropHandoff(null)
   }
 
-  const openSelection = (nextSelection: PlannerSelection) => {
-    if (suppressSelectionRef.current) {
-      return
+  const pushDropHandoff = (event: PlannerDropHandoffBase) => {
+    const key = ++feedbackSequenceRef.current
+
+    if (dropHandoffTimerRef.current !== null) {
+      window.clearTimeout(dropHandoffTimerRef.current)
     }
 
-    setSelection(nextSelection)
+    setDropHandoff({ ...event, key })
+    dropHandoffTimerRef.current = window.setTimeout(() => {
+      setDropHandoff((current) => (current?.key === key ? null : current))
+      dropHandoffTimerRef.current = null
+    }, getPlannerDropHandoffDuration(reduceMotion))
   }
 
-  const queueRowAssignmentTransition = (
-    rowId: string,
-    kind: RowAssignmentTransition['kind'],
-    personId: string,
-  ) => {
-    const key = ++rowTransitionSequenceRef.current
+  const pushMotionEvent = (event: PlannerMotionEventBase) => {
+    const key = ++feedbackSequenceRef.current
+    const nextEvent: PlannerMotionEvent = { ...event, key }
 
-    setRowAssignmentTransitions((currentTransitions) => ({
-      ...currentTransitions,
-      [rowId]: {
-        kind,
-        personId,
-        key,
-      },
-    }))
-
-    if (rowTransitionTimeoutsRef.current[rowId] !== undefined) {
-      window.clearTimeout(rowTransitionTimeoutsRef.current[rowId])
+    if (recentEventTimerRef.current !== null) {
+      window.clearTimeout(recentEventTimerRef.current)
     }
 
-    rowTransitionTimeoutsRef.current[rowId] = window.setTimeout(() => {
-      setRowAssignmentTransitions((currentTransitions) => {
-        if (!currentTransitions[rowId] || currentTransitions[rowId].key !== key) {
-          return currentTransitions
-        }
-
-        const nextTransitions = { ...currentTransitions }
-        delete nextTransitions[rowId]
-        return nextTransitions
-      })
-      delete rowTransitionTimeoutsRef.current[rowId]
-    }, 480)
+    setRecentEvent(nextEvent)
+    recentEventTimerRef.current = window.setTimeout(() => {
+      setRecentEvent((current) => (current?.key === key ? null : current))
+      recentEventTimerRef.current = null
+    }, reduceMotion ? 140 : 520)
   }
 
-  const clearRowAssignee = (rowId: string) => {
-    const personId = state.rows[rowId]?.assignedPersonId
+  const pushRejectedDrag = (item: PlannerDragItem) => {
+    const key = ++feedbackSequenceRef.current
 
-    if (!personId) {
-      return
+    if (rejectedDragTimerRef.current !== null) {
+      window.clearTimeout(rejectedDragTimerRef.current)
     }
 
-    queueRowAssignmentTransition(rowId, 'clear', personId)
-    dispatch({ type: 'clearRowAssignee', rowId })
+    setRejectedDrag({ item, key })
+    rejectedDragTimerRef.current = window.setTimeout(() => {
+      setRejectedDrag((current) => (current?.key === key ? null : current))
+      rejectedDragTimerRef.current = null
+    }, reduceMotion ? 120 : 360)
   }
 
   const handleDragStart = (event: DragStartEvent) => {
-    suppressSelectionTemporarily(180)
+    const initialRect = event.active.rect.current.initial
+
     setSelection(null)
     setActiveDrag(getPlannerDragItem(event.active))
+    setDragVector({ x: 0, y: 0 })
+    setOverlaySize(
+      initialRect ? { width: initialRect.width, height: initialRect.height } : null,
+    )
+    setDropAnimationKind('valid')
+    clearDropHandoff()
+  }
+
+  const handleDragMove = (event: DragMoveEvent) => {
+    setDragVector(event.delta)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
+    const dragItem = getPlannerDragItem(event.active)
     const action = resolveDrop(
       state,
-      getPlannerDragItem(event.active),
+      dragItem,
       getPlannerDropTarget(event.over),
     )
 
     if (action) {
-      if (action.type === 'assignPersonToRow') {
-        queueRowAssignmentTransition(action.rowId, 'assign', action.personId)
+      setDropAnimationKind('valid')
+      const dropHandoffEvent = actionToDropHandoff(action)
+
+      if (dropHandoffEvent) {
+        pushDropHandoff(dropHandoffEvent)
       }
 
       dispatch(action)
+      const motionEvent = actionToMotionEvent(action)
+
+      if (motionEvent) {
+        pushMotionEvent(motionEvent)
+      }
+    } else if (dragItem) {
+      setDropAnimationKind('invalid')
+      clearDropHandoff()
+      pushRejectedDrag(dragItem)
     }
 
     setActiveDrag(null)
-    suppressSelectionTemporarily(160)
+    setDragVector({ x: 0, y: 0 })
   }
 
-  const overlayTask =
-    activeDrag?.type === 'task' ? state.tasks[activeDrag.taskId] : undefined
-  const overlayPerson =
-    activeDrag?.type === 'person' ? state.people[activeDrag.personId] : undefined
+  const handleClearRowResponsible = (rowId: string) => {
+    pushMotionEvent({ type: 'clearRowResponsible', rowId })
+    dispatch({ type: 'clearRowResponsible', rowId })
+  }
+
+  const overlayCard =
+    activeDrag?.type === 'need-card' ? state.needCards[activeDrag.cardId] : undefined
+  const overlaySubstitute =
+    activeDrag?.type === 'substitute'
+      ? state.substitutes[activeDrag.substituteId]
+      : undefined
 
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={plannerCollisionDetection}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onDragCancel={() => {
+        if (activeDrag) {
+          setDropAnimationKind('invalid')
+          clearDropHandoff()
+          pushRejectedDrag(activeDrag)
+        }
+
         setActiveDrag(null)
-        suppressSelectionTemporarily(160)
+        setDragVector({ x: 0, y: 0 })
       }}
     >
-      <main className="paper-shell min-h-screen px-4 py-5 md:px-6 md:py-7">
-        <div className="mx-auto grid w-full max-w-[120rem] gap-6 xl:grid-cols-[18rem_minmax(0,1fr)_16rem]">
-          <TasksPanel
-            activeDrag={activeDrag}
-            selection={selection}
-            onOpenSelection={openSelection}
-            onSuppressSelection={() => suppressSelectionTemporarily(160)}
-          />
-          <CalendarGrid
-            activeDrag={activeDrag}
-            selection={selection}
-            rowAssignmentTransitions={rowAssignmentTransitions}
-            onClearRowAssignee={clearRowAssignee}
-            onOpenSelection={openSelection}
-            onCloseSelection={() => setSelection(null)}
-            onSuppressSelection={() => suppressSelectionTemporarily(160)}
-          />
-          <PeoplePanel activeDrag={activeDrag} />
-        </div>
-      </main>
+      <PlannerDragFeedbackProvider
+        value={{
+          dragVector,
+          dropHandoff,
+          recentEvent,
+          rejectedDrag,
+          pushMotionEvent,
+        }}
+      >
+        <main className="planner-shell min-h-screen px-2 py-2.5 md:px-3 md:py-3.5 xl:px-3 xl:py-4">
+          <div className="mx-auto grid w-full max-w-[126rem] gap-2.5 xl:grid-cols-[15.5rem_minmax(0,1fr)_15.5rem]">
+            <TasksPanel
+              activeDrag={activeDrag}
+              selection={selection}
+              onOpenSelection={setSelection}
+            />
+            <CalendarGrid
+              activeDrag={activeDrag}
+              selection={selection}
+              onClearRowResponsible={handleClearRowResponsible}
+              onOpenSelection={setSelection}
+              onCloseSelection={() => setSelection(null)}
+            />
+            <PeoplePanel activeDrag={activeDrag} />
+          </div>
+        </main>
 
-      <DragOverlay>
-        {overlayTask ? <DragOverlayCard task={overlayTask} /> : null}
-        {overlayPerson ? <DragOverlayCard person={overlayPerson} /> : null}
-      </DragOverlay>
+        <DragOverlay
+          adjustScale={false}
+          zIndex={60}
+          dropAnimation={getPlannerDropAnimation(dropAnimationKind, reduceMotion)}
+        >
+          {overlayCard ? (
+            <DragOverlayCard
+              card={overlayCard}
+              dragVector={dragVector}
+              size={overlaySize}
+            />
+          ) : null}
+          {overlaySubstitute ? (
+            <DragOverlayCard
+              substitute={overlaySubstitute}
+              dragVector={dragVector}
+              size={overlaySize}
+            />
+          ) : null}
+        </DragOverlay>
+      </PlannerDragFeedbackProvider>
     </DndContext>
   )
 }

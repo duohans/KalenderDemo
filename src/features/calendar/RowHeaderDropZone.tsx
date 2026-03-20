@@ -1,57 +1,69 @@
 import { useDroppable } from '@dnd-kit/core'
-import { AnimatePresence, motion } from 'framer-motion'
-import type { KeyboardEvent } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { LayoutGrid, UserCheck, UserPlus, X } from 'lucide-react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 
 import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd.ts'
-import {
-  selectPersonById,
-  selectRowDisplayName,
-} from '../../domain/schedule/selectors.ts'
+import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
 import type { PlannerSelection } from '../layout/plannerSelection.ts'
+import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
+import {
+  getTargetActivationAnimation,
+  plannerLayoutSpring,
+  plannerReceiveSpring,
+  plannerTargetSpring,
+} from '../motion/plannerMotion.ts'
+import { useSchedule } from '../schedule/useSchedule.ts'
 
 type RowHeaderDropZoneProps = {
   rowId: string
   activeDrag: PlannerDragItem | null
-  rowAssignmentTransition: {
-    kind: 'assign' | 'clear'
-    personId: string
-    key: number
-  } | null
-  onClearRowAssignee: (rowId: string) => void
   isSelected: boolean
+  onClearRowResponsible: (rowId: string) => void
   onOpenDetails: (selection: PlannerSelection) => void
 }
 
 export function RowHeaderDropZone({
   rowId,
   activeDrag,
-  rowAssignmentTransition,
-  onClearRowAssignee,
   isSelected,
+  onClearRowResponsible,
   onOpenDetails,
 }: RowHeaderDropZoneProps) {
   const { state } = useSchedule()
-  const row = state.rows[rowId]
-  const assignedPerson = selectPersonById(state, row.assignedPersonId)
-  const transitionPerson = selectPersonById(state, rowAssignmentTransition?.personId ?? null)
-  const displayName = selectRowDisplayName(state, row.id)
+  const reduceMotion = useReducedMotion() ?? false
+  const { recentEvent } = usePlannerDragFeedback()
+
   const { isOver, setNodeRef } = useDroppable({
-    id: `row-header:${row.id}`,
+    id: `row-header:${rowId}`,
     data: {
       type: 'row-header',
-      rowId: row.id,
+      rowId,
     },
   })
 
-  const canAcceptPerson =
-    activeDrag?.type === 'person' &&
-    canDropOnTarget(state, activeDrag, { type: 'row-header', rowId: row.id })
-  const showPersonDropReady = Boolean(canAcceptPerson)
+  const displayModel = selectRowDisplayModel(state, rowId)
+
+  if (!displayModel) {
+    return null
+  }
+
+  const { responsible, teachers, title } = displayModel
+  const visibleTeachers = teachers.slice(0, 2)
+  const hiddenTeacherCount = Math.max(0, teachers.length - visibleTeachers.length)
+  const canAcceptSubstitute =
+    activeDrag?.type === 'substitute' &&
+    canDropOnTarget(state, activeDrag, { type: 'row-header', rowId })
+  const dropHintLabel = canAcceptSubstitute && isOver ? 'Slipp vikar her' : 'Tildel vikar'
+  const DropHintIcon = canAcceptSubstitute && isOver ? UserCheck : UserPlus
+  const isReceivingResponsible =
+    recentEvent?.type === 'assignSubstituteToRow' && recentEvent.rowId === rowId
+  const isClearingResponsible =
+    recentEvent?.type === 'clearRowResponsible' && recentEvent.rowId === rowId
 
   const openDetails = () => {
-    onOpenDetails({ kind: 'row', rowId: row.id })
+    onOpenDetails({ kind: 'row', rowId })
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -63,42 +75,33 @@ export function RowHeaderDropZone({
     openDetails()
   }
 
-  const animatedPerson =
-    rowAssignmentTransition?.kind === 'clear' ? transitionPerson : assignedPerson
-  const shouldAnimateAssignment =
-    rowAssignmentTransition?.kind === 'assign' &&
-    Boolean(assignedPerson) &&
-    rowAssignmentTransition.personId === assignedPerson?.id
-  const shouldAnimateClear =
-    rowAssignmentTransition?.kind === 'clear' &&
-    Boolean(transitionPerson)
-
-  const avatar = animatedPerson ? (
+  return (
     <motion.div
-      key={`${row.id}-${animatedPerson.id}`}
       layout
-      layoutId={`row-owner-${row.id}`}
-      className="row-owner-avatar-shell"
-      title={animatedPerson.name}
-      role="img"
-      aria-label={`Radansvarlig: ${animatedPerson.name}`}
-      initial={
-        shouldAnimateAssignment
-          ? { x: 88, opacity: 0.92, scale: 0.92, rotate: 5 }
-          : { x: 0, opacity: 1, scale: 1, rotate: 0 }
-      }
-      animate={
-        shouldAnimateClear
-          ? { x: 88, opacity: 0, scale: 0.92, rotate: -5 }
-          : { x: 0, opacity: 1, scale: 1, rotate: 0 }
-      }
-      transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+      ref={setNodeRef}
+      animate={getTargetActivationAnimation(
+        'row',
+        {
+          ready: canAcceptSubstitute,
+          active: canAcceptSubstitute && isOver,
+        },
+        reduceMotion,
+      )}
+      transition={plannerTargetSpring}
+      className={cx(
+        'row-header-dropzone',
+        responsible && 'row-header-dropzone--owned',
+        canAcceptSubstitute && 'drop-target-ready',
+        canAcceptSubstitute && isOver && 'drop-target-valid',
+        isSelected && 'selection-active',
+      )}
+      style={{ ['--row-accent' as string]: displayModel.rowAccent } as CSSProperties}
+      aria-label={`Tildel vikar til ${title.full}`}
     >
-      <span className="row-owner-avatar">{animatedPerson.avatarInitials}</span>
-      {assignedPerson ? (
+      {displayModel.canClearResponsible ? (
         <button
           type="button"
-          className="row-owner-avatar__clear"
+          className="row-header__corner-clear"
           onPointerDown={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -106,29 +109,13 @@ export function RowHeaderDropZone({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            onClearRowAssignee(row.id)
+            onClearRowResponsible(rowId)
           }}
           aria-label="Fjern radansvarlig"
         >
-          <span aria-hidden="true">x</span>
+          <X size={14} strokeWidth={2.25} aria-hidden="true" />
         </button>
       ) : null}
-    </motion.div>
-  ) : null
-
-  return (
-    <motion.div
-      layout
-      ref={setNodeRef}
-      className={cx(
-        'row-header-dropzone',
-        row.assignedPersonId && 'row-header-dropzone--owned',
-        showPersonDropReady && 'drop-target-ready',
-        canAcceptPerson && isOver && 'drop-target-valid',
-        isSelected && 'selection-active',
-      )}
-      aria-label={`Tildel person til ${displayName}`}
-    >
       <motion.div
         layout
         role="button"
@@ -136,43 +123,123 @@ export function RowHeaderDropZone({
         className="row-header-button"
         onClick={openDetails}
         onKeyDown={handleKeyDown}
-        aria-label={`Åpne detaljer for ${displayName}`}
         aria-haspopup="dialog"
         aria-expanded={isSelected}
+        aria-label={`Åpne detaljer for ${title.full}`}
+        transition={plannerLayoutSpring}
       >
-        <div className="row-header-main">
-          <div className="row-header-avatar-slot row-header-avatar-slot--lead">
-            {avatar}
-          </div>
+        <div className="row-header__main">
+          <AnimatePresence initial={false} mode="popLayout">
+            <motion.div
+              key={responsible?.id ?? 'empty'}
+              layout
+              initial={
+                isReceivingResponsible
+                  ? {
+                      opacity: 0.78,
+                      scale: reduceMotion ? 1.02 : 1.14,
+                      x: reduceMotion ? 0 : 8,
+                      y: reduceMotion ? 0 : -8,
+                      rotate: reduceMotion ? 0 : -4,
+                    }
+                  : { opacity: 0, scale: 0.92 }
+              }
+              animate={
+                canAcceptSubstitute && isOver
+                  ? {
+                      scale: reduceMotion ? 1.01 : 1.06,
+                      x: reduceMotion ? 0 : 2,
+                      y: reduceMotion ? 0 : -2,
+                      rotate: 0,
+                      opacity: 1,
+                    }
+                  : isClearingResponsible
+                    ? { opacity: 0.7, scale: 0.92, y: 2 }
+                    : { opacity: 1, scale: 1, x: 0, y: 0, rotate: 0 }
+              }
+              exit={
+                reduceMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, scale: 0.88, y: 8, rotate: 4 }
+              }
+              transition={
+                isReceivingResponsible || isClearingResponsible
+                  ? plannerReceiveSpring
+                  : plannerLayoutSpring
+              }
+              className="row-header__avatar-shell"
+            >
+              {responsible ? (
+                <span className="row-header__avatar" title={responsible.name}>
+                  {responsible.avatarInitials}
+                </span>
+              ) : (
+                <span className="row-header__avatar row-header__avatar--ghost">
+                  <UserPlus aria-hidden="true" size={16} strokeWidth={2.25} />
+                </span>
+              )}
+            </motion.div>
+          </AnimatePresence>
           <div className="min-w-0 flex-1">
-            <AnimatePresence initial={false} mode="popLayout">
-              <motion.span
-                key={displayName}
-                layout
-                initial={{ opacity: 0, y: 8, rotate: -1.2 }}
-                animate={{ opacity: 1, y: 0, rotate: 0 }}
-                exit={{ opacity: 0, y: -8, rotate: 1.2 }}
-                transition={{ type: 'spring', stiffness: 360, damping: 28 }}
-                className="scribble-label row-header-title truncate"
-                title={displayName}
-              >
-                {displayName}
-              </motion.span>
-            </AnimatePresence>
+            <h3 className="row-header__title planner-heading" title={title.full}>
+              {title.compact}
+            </h3>
           </div>
         </div>
-        <div className="row-header-avatar-slot row-header-avatar-slot--trail">
-          {!animatedPerson ? (
-            <span
+
+        <div className="row-header__footer">
+          <div className="teacher-pill-list" aria-hidden="true">
+            {visibleTeachers.map((teacher) => (
+              <span
+                key={teacher.id}
+                className="teacher-pill"
+                title={teacher.name}
+              >
+                <span
+                  className="teacher-pill__avatar"
+                  style={{ backgroundColor: teacher.accentColor }}
+                >
+                  {teacher.avatarInitials}
+                </span>
+                <span className="teacher-pill__label">{teacher.name.split(' ')[0]}</span>
+              </span>
+            ))}
+            {hiddenTeacherCount > 0 ? (
+              <span className="teacher-pill teacher-pill--more">+{hiddenTeacherCount}</span>
+            ) : null}
+            {teachers.length === 0 ? (
+              <span className="teacher-pill teacher-pill--empty">
+                <LayoutGrid aria-hidden="true" size={12} strokeWidth={2.25} />
+              </span>
+            ) : null}
+          </div>
+
+          <div className="row-header__actions">
+            <motion.span
               className={cx(
                 'row-drop-hint',
-                showPersonDropReady && 'row-drop-hint--ready',
-                canAcceptPerson && isOver && 'row-drop-hint--active',
+                responsible && 'row-drop-hint--owned',
+                canAcceptSubstitute && 'row-drop-hint--ready',
+                canAcceptSubstitute && isOver && 'row-drop-hint--active',
               )}
+              title={dropHintLabel}
+              aria-label={dropHintLabel}
+              animate={
+                canAcceptSubstitute && isOver
+                  ? {
+                      scale: reduceMotion ? 1.03 : 1.08,
+                      x: 0,
+                      y: reduceMotion ? 0 : -1,
+                      rotate: 0,
+                      opacity: 1,
+                    }
+                  : { scale: 1, x: 0, y: 0, rotate: 0, opacity: 1 }
+              }
+              transition={plannerTargetSpring}
             >
-              {showPersonDropReady ? 'Slipp person' : '+ Tildel'}
-            </span>
-          ) : null}
+              <DropHintIcon aria-hidden="true" size={14} strokeWidth={2.25} />
+            </motion.span>
+          </div>
         </div>
       </motion.div>
     </motion.div>

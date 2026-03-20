@@ -1,18 +1,18 @@
 export type PlannerSelection =
   | {
-      kind: 'task'
-      taskId: string
+      kind: 'need-card'
+      cardId: string
     }
   | {
       kind: 'row'
       rowId: string
     }
 
-export function isTaskSelection(
+export function isNeedCardSelection(
   selection: PlannerSelection | null,
-  taskId: string,
+  cardId: string,
 ) {
-  return selection?.kind === 'task' && selection.taskId === taskId
+  return selection?.kind === 'need-card' && selection.cardId === cardId
 }
 
 export function isRowSelection(

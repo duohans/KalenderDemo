@@ -1,57 +1,88 @@
 import { motion, useReducedMotion } from 'framer-motion'
+import { UserPlus } from 'lucide-react'
+import type { CSSProperties } from 'react'
 
-import type { Person, Task } from '../../domain/schedule/types.ts'
+import { selectNeedCardDisplayModel } from '../../domain/schedule/selectors.ts'
+import type { NeedCard, Substitute } from '../../domain/schedule/types.ts'
+import {
+  getOverlayDragAnimation,
+  plannerReceiveSpring,
+  type DragVector,
+} from '../motion/plannerMotion.ts'
+import { useSchedule } from '../schedule/useSchedule.ts'
+import { AssigneeBadge } from './AssigneeBadge.tsx'
+import { NeedCardVisual } from './NeedCardVisual.tsx'
 
 type DragOverlayCardProps =
   | {
-      task: Task
-      person?: never
+      card: NeedCard
+      dragVector: DragVector
+      size?: { width: number; height: number } | null
+      substitute?: never
     }
   | {
-      person: Person
-      task?: never
+      substitute: Substitute
+      dragVector: DragVector
+      size?: { width: number; height: number } | null
+      card?: never
     }
 
-export function DragOverlayCard({ task, person }: DragOverlayCardProps) {
-  const reduceMotion = useReducedMotion()
+export function DragOverlayCard({ card, substitute, dragVector, size }: DragOverlayCardProps) {
+  const reduceMotion = useReducedMotion() ?? false
+  const { state } = useSchedule()
 
-  if (task) {
+  if (card) {
+    const displayModel = selectNeedCardDisplayModel(state, card.id)
+
     return (
       <motion.div
-        initial={{ scale: 0.96, y: 0 }}
-        animate={{
-          scale: 1.04,
-          y: -6,
-          rotate: reduceMotion ? 0 : -1.8,
+        initial={{ scale: 0.98, y: 0, rotate: 0, x: 0 }}
+        animate={getOverlayDragAnimation('need-card', dragVector, reduceMotion)}
+        transition={plannerReceiveSpring}
+        className="drag-overlay-card drag-overlay-card--card"
+        style={{
+          width: size?.width,
+          height: size?.height,
         }}
-        transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-        className="paper-card drag-overlay-card max-w-[16rem] p-3"
-        style={{ backgroundColor: task.color }}
       >
-        <p className="panel-kicker">Flytter kort</p>
-        <p className="mt-1 text-[1.12rem] leading-tight">{task.title}</p>
+        <NeedCardVisual
+          card={card}
+          displayModel={displayModel}
+          variant="overlay"
+          markerSlot={
+            <div className="need-card__markers">
+              <AssigneeBadge
+                person={displayModel?.effectiveAssignee ?? null}
+                mode={displayModel?.assignmentMode ?? 'unassigned'}
+                density="compact"
+              />
+            </div>
+          }
+        />
       </motion.div>
     )
   }
 
   return (
     <motion.div
-      initial={{ scale: 0.96, y: 0 }}
-      animate={{
-        scale: 1.04,
-        y: -6,
-        rotate: reduceMotion ? 0 : 1.6,
-      }}
-      transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-      className="paper-chip drag-overlay-card"
-      style={{ backgroundColor: person.accentColor }}
+      initial={{ scale: 0.98, y: 0, rotate: 0, x: 0 }}
+      animate={getOverlayDragAnimation('substitute', dragVector, reduceMotion)}
+      transition={plannerReceiveSpring}
+      className="drag-overlay-card drag-overlay-card--substitute"
+      style={
+        {
+          width: size?.width,
+          height: size?.height,
+          ['--badge-accent' as string]: substitute.accentColor,
+        } as CSSProperties
+      }
     >
-      <span className="person-chip__avatar">{person.avatarInitials}</span>
-      <span className="text-left">
-        <span className="block text-[1.04rem] leading-none">{person.name}</span>
-        <span className="mt-1 block text-[0.8rem] uppercase tracking-[0.08em] text-[color:var(--foreground-soft)]">
-          Tildeler person
-        </span>
+      <span className="substitute-card__avatar">{substitute.avatarInitials}</span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-[1rem] leading-none">{substitute.name}</span>
+      </span>
+      <span className="drag-overlay-card__icon" aria-hidden="true">
+        <UserPlus size={18} strokeWidth={2.25} />
       </span>
     </motion.div>
   )

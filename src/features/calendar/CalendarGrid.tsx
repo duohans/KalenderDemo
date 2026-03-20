@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 
 import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
-import { selectCellTaskIdMap } from '../../domain/schedule/selectors.ts'
+import { selectCellNeedCardIdMap } from '../../domain/schedule/selectors.ts'
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { PlannerDetailSheet } from '../layout/PlannerDetailSheet.tsx'
 import type { PlannerSelection } from '../layout/plannerSelection.ts'
@@ -12,71 +12,61 @@ import { TimeHeader } from './TimeHeader.tsx'
 type CalendarGridProps = {
   activeDrag: PlannerDragItem | null
   selection: PlannerSelection | null
-  rowAssignmentTransitions: Record<
-    string,
-    {
-      kind: 'assign' | 'clear'
-      personId: string
-      key: number
-    }
-  >
-  onClearRowAssignee: (rowId: string) => void
+  onClearRowResponsible: (rowId: string) => void
   onOpenSelection: (selection: PlannerSelection) => void
   onCloseSelection: () => void
-  onSuppressSelection: () => void
 }
 
 export function CalendarGrid({
   activeDrag,
   selection,
-  rowAssignmentTransitions,
-  onClearRowAssignee,
+  onClearRowResponsible,
   onOpenSelection,
   onCloseSelection,
-  onSuppressSelection,
 }: CalendarGridProps) {
   const { state } = useSchedule()
-  const cellTaskMap = selectCellTaskIdMap(state)
+  const cellNeedCardMap = selectCellNeedCardIdMap(state)
 
   return (
     <motion.section
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.24, ease: 'easeOut' }}
-      className="flex min-h-[44rem] flex-col"
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+      className="planner-stage order-1 flex min-h-[43.5rem] flex-col gap-2.5 xl:order-2"
     >
-      <div className="planner-grid-frame relative flex-1 overflow-hidden rounded-[28px] border-[2px] border-[var(--border)] bg-[var(--paper-strong)]">
-        <div className="h-full overflow-auto px-3 py-3 md:px-4">
-          <div className="calendar-board min-w-[72rem]">
+      <h1 className="sr-only">Dagsplan</h1>
+
+      <div className="planner-grid-frame relative flex min-h-0 flex-1 flex-col">
+        <div className="planner-grid-scroll flex-1 p-2 md:p-3">
+          <div className="calendar-board w-full">
             <div className="calendar-header-grid">
               <div aria-hidden="true" className="calendar-header-spacer" />
               {TIME_BLOCKS.map((block) => (
-                <TimeHeader key={block.key} block={block} />
+                <TimeHeader key={block.id} block={block} />
               ))}
             </div>
 
-            <div className="mt-3 space-y-3">
+            <div className="mt-2 space-y-2">
               {state.rowOrder.map((rowId) => (
                 <RowLane
                   key={rowId}
                   rowId={rowId}
-                  cellTaskMap={cellTaskMap}
+                  cellNeedCardMap={cellNeedCardMap}
                   activeDrag={activeDrag}
                   selection={selection}
-                  rowAssignmentTransition={rowAssignmentTransitions[rowId] ?? null}
-                  onClearRowAssignee={onClearRowAssignee}
+                  onClearRowResponsible={onClearRowResponsible}
                   onOpenSelection={onOpenSelection}
-                  onSuppressSelection={onSuppressSelection}
                 />
               ))}
             </div>
           </div>
         </div>
+
         <PlannerDetailSheet
           selection={selection}
           onClose={onCloseSelection}
-          onClearRowAssignee={onClearRowAssignee}
-          onSelectTask={(taskId) => onOpenSelection({ kind: 'task', taskId })}
+          onClearRowResponsible={onClearRowResponsible}
+          onSelectCard={(cardId) => onOpenSelection({ kind: 'need-card', cardId })}
         />
       </div>
     </motion.section>

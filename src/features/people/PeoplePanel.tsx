@@ -9,19 +9,29 @@ type PeoplePanelProps = {
 
 export function PeoplePanel({ activeDrag }: PeoplePanelProps) {
   const { state } = useSchedule()
+  const useCompactDensity = state.substituteOrder.length > 5
 
   return (
     <PanelFrame
-      title="Personer"
-      kicker={null}
-      tilt="right"
-      className="overflow-hidden"
+      title="Vikarer"
+      tooltip="Rad = standardansvar. Kort = overstyring."
+      meta={<span className="panel-count">{state.substituteOrder.length}</span>}
+      tone="neutral"
+      headerStyle="split"
+      className="order-3"
     >
-      <div className="flex max-h-[34rem] flex-col gap-3 overflow-y-auto pr-1">
-        {state.personOrder.map((personId) => (
+      <div
+        className={[
+          'panel-scroll flex flex-col gap-2',
+          useCompactDensity ? 'panel-scroll--compact' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {state.substituteOrder.map((substituteId) => (
           <PersonCard
-            key={personId}
-            person={state.people[personId]}
+            key={substituteId}
+            person={state.substitutes[substituteId]}
             activeDrag={activeDrag}
           />
         ))}

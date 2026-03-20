@@ -1,113 +1,110 @@
-import type { Person } from '../../domain/schedule/types.ts'
+import { ArrowDownLeft, Minus, Pin, X } from 'lucide-react'
+import type { AssignmentMode, Substitute } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
 
 type AssigneeBadgeProps = {
-  person: Person | null
-  scope: 'row' | 'task' | 'inherited' | 'empty'
+  person: Substitute | null
+  mode: AssignmentMode
   density?: 'compact' | 'detail'
-  showCompactName?: boolean
+  showName?: boolean
+  showLabel?: boolean
+  compactLabel?: string
   labelOverride?: string
   onClear?: () => void
   clearLabel?: string
 }
 
-const labelByScope = {
-  row: 'Radansvarlig',
-  task: 'Ansvarlig',
+const labelByMode: Record<AssignmentMode, string> = {
+  explicit: 'Direkte',
   inherited: 'Via rad',
-  empty: 'Ikke tildelt',
+  unassigned: 'Uten vikar',
+}
+
+const iconByMode = {
+  explicit: Pin,
+  inherited: ArrowDownLeft,
+  unassigned: Minus,
 } as const
 
 export function AssigneeBadge({
   person,
-  scope,
+  mode,
   density = 'detail',
-  showCompactName = false,
+  showName = false,
+  showLabel = false,
+  compactLabel,
   labelOverride,
   onClear,
   clearLabel,
 }: AssigneeBadgeProps) {
-  const label = labelOverride ?? labelByScope[scope]
-  const effectiveClearLabel =
-    clearLabel ?? `Fjern ${scope === 'row' ? 'radansvarlig' : 'ansvarlig'}`
-  const showCompactEmptyMarker = density === 'compact' && !person
+  const label = labelOverride ?? labelByMode[mode]
+  const isCompact = density === 'compact'
+  const ModeIcon = iconByMode[mode]
+  const visibleLabel = isCompact && compactLabel ? compactLabel : label
 
   return (
     <div
       className={cx(
         'assignee-badge',
-        `assignee-badge--${scope}`,
-        density === 'detail' && 'assignee-badge--detail',
-        density === 'compact' && 'assignee-badge--compact',
-        density === 'compact' && showCompactName && 'assignee-badge--compact-name',
+        `assignee-badge--${mode}`,
+        isCompact ? 'assignee-badge--compact' : 'assignee-badge--detail',
+        showName && 'assignee-badge--with-name',
       )}
-      aria-label={showCompactEmptyMarker ? label : undefined}
+      style={{ ['--badge-accent' as string]: person?.accentColor ?? '#d1d5db' }}
+      aria-label={person ? `${label}: ${person.name}` : label}
     >
-      {person ? (
-        <>
-          <span
-            className={cx(
-              'assignee-badge__avatar-shell',
-              density === 'compact' && 'assignee-badge__avatar-shell--compact',
-            )}
-            title={person.name}
-            role={density === 'compact' && !showCompactName ? 'img' : undefined}
-            aria-label={
-              density === 'compact' && !showCompactName ? `${label}: ${person.name}` : undefined
-            }
+      <span className="assignee-badge__avatar-shell">
+        <span
+          className={cx(
+            'assignee-badge__avatar',
+            !person && 'assignee-badge__avatar--empty',
+          )}
+        >
+          {person ? person.avatarInitials : <Minus size={13} strokeWidth={2.25} />}
+        </span>
+        <span aria-hidden="true" className="assignee-badge__state-mark">
+          <ModeIcon size={12} strokeWidth={2.25} />
+        </span>
+        {isCompact && onClear ? (
+          <button
+            type="button"
+            className="assignee-badge__compact-clear"
+            onPointerDown={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onClear()
+            }}
+            aria-label={clearLabel ?? 'Fjern direkte tildeling'}
           >
-            <span className="assignee-badge__avatar">{person.avatarInitials}</span>
-            {density === 'compact' && onClear ? (
-              <button
-                type="button"
-                className="assignee-badge__compact-clear"
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                }}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  onClear()
-                }}
-                aria-label={effectiveClearLabel}
-              >
-                <span aria-hidden="true">x</span>
-              </button>
-            ) : null}
-          </span>
-          {density === 'detail' ? (
-            <span className="flex flex-col leading-none">
-              <span className="text-[0.68rem] uppercase tracking-[0.08em] text-[color:var(--foreground-soft)]">
-                {label}
-              </span>
-              <span className="text-[0.96rem]">{person.name}</span>
-            </span>
-          ) : showCompactName ? (
-            <span className="assignee-badge__compact-name-text" title={person.name}>
+            <X size={12} strokeWidth={2.25} />
+          </button>
+        ) : null}
+      </span>
+      {!isCompact || showName || showLabel ? (
+        <span className="min-w-0 leading-none">
+          {!isCompact || showLabel ? (
+            <span className="assignee-badge__label">{visibleLabel}</span>
+          ) : null}
+          {person && (!isCompact || showName) ? (
+            <span className="assignee-badge__name" title={person.name}>
               {person.name}
             </span>
           ) : null}
-        </>
-      ) : showCompactEmptyMarker ? (
-        <>
-          <span aria-hidden="true" className="assignee-badge__empty-mark" data-testid="empty-assignee-marker" />
-          <span className="sr-only">{label}</span>
-        </>
-      ) : (
-        <span className={cx(density === 'compact' ? 'text-[0.86rem]' : 'text-[0.92rem]')}>
-          {label}
         </span>
-      )}
-
-      {density === 'detail' && onClear ? (
+      ) : null}
+      {!isCompact && onClear ? (
         <button
           type="button"
           className="badge-clear"
           onClick={onClear}
-          aria-label={effectiveClearLabel}
+          aria-label={clearLabel ?? 'Fjern direkte tildeling'}
         >
-          fjern
+          <X size={14} strokeWidth={2.25} aria-hidden="true" />
+          Fjern
         </button>
       ) : null}
     </div>
