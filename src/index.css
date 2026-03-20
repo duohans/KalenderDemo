@@ -1420,27 +1420,61 @@ button:focus-visible,
 .drag-overlay-card--card .need-card {
   height: 100%;
   cursor: grabbing;
+  border-radius: 0.98rem;
+  box-shadow:
+    0 14px 24px rgba(17, 24, 39, 0.1),
+    0 6px 12px rgba(17, 24, 39, 0.08);
+  transition:
+    transform 300ms cubic-bezier(0.16, 0.94, 0.22, 1),
+    background-color 300ms cubic-bezier(0.16, 0.94, 0.22, 1),
+    border-color 300ms cubic-bezier(0.16, 0.94, 0.22, 1),
+    box-shadow 320ms cubic-bezier(0.16, 0.94, 0.22, 1),
+    border-radius 300ms cubic-bezier(0.16, 0.94, 0.22, 1);
+}
+
+.drag-overlay-card--card .need-card--overlay-lifted {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--assignee-accent, var(--teacher-accent)) 24%, #ffffff);
   box-shadow:
     0 24px 38px rgba(17, 24, 39, 0.18),
     0 10px 18px rgba(17, 24, 39, 0.12);
-  transition:
-    transform 180ms cubic-bezier(0.2, 0.9, 0.24, 1),
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 220ms cubic-bezier(0.18, 0.88, 0.24, 1);
-}
-
-.drag-overlay-card--card .need-card--overlay {
-  transform: translateY(-1px);
 }
 
 .planner-drop-overlay-settling.drag-overlay-card--card .need-card,
 .planner-drop-overlay-settling .drag-overlay-card--card .need-card,
 .planner-drop-overlay-settling .need-card--overlay {
   transform: translateY(0);
+  border-radius: 0.95rem;
+}
+
+.planner-drop-overlay-settling.drag-overlay-card--card .need-card--unassigned,
+.planner-drop-overlay-settling .drag-overlay-card--card .need-card--unassigned,
+.planner-drop-overlay-settling .need-card--overlay.need-card--unassigned {
+  border-color: color-mix(in srgb, var(--teacher-accent) 28%, var(--border));
+  box-shadow: none;
+}
+
+.planner-drop-overlay-settling.drag-overlay-card--card .need-card--inherited,
+.planner-drop-overlay-settling .drag-overlay-card--card .need-card--inherited,
+.planner-drop-overlay-settling .need-card--overlay.need-card--inherited {
+  border-color: color-mix(in srgb, var(--teacher-accent) 32%, var(--border));
+  box-shadow: none;
+}
+
+.planner-drop-overlay-settling.drag-overlay-card--card .need-card--explicit,
+.planner-drop-overlay-settling .drag-overlay-card--card .need-card--explicit,
+.planner-drop-overlay-settling .need-card--overlay.need-card--explicit {
+  border-color: color-mix(in srgb, var(--assignee-accent) 40%, var(--teacher-accent));
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--assignee-accent, #d1d5db) 14%, transparent),
-    0 12px 20px rgba(17, 24, 39, 0.1);
+    inset 0 0 0 1px color-mix(in srgb, var(--assignee-accent) 18%, transparent),
+    0 10px 18px rgba(17, 24, 39, 0.05);
+}
+
+.planner-drop-overlay-settling.drag-overlay-card--card .need-card--conflict,
+.planner-drop-overlay-settling .drag-overlay-card--card .need-card--conflict,
+.planner-drop-overlay-settling .need-card--overlay.need-card--conflict {
+  border-color: var(--accent-strong);
+  box-shadow: none;
 }
 
 .drag-overlay-card--substitute {

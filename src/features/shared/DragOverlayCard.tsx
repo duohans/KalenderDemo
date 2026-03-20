@@ -1,11 +1,13 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { UserPlus } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 
 import { selectNeedCardDisplayModel } from '../../domain/schedule/selectors.ts'
 import type { NeedCard, Substitute } from '../../domain/schedule/types.ts'
 import {
   getOverlayDragAnimation,
+  getOverlayRestAnimation,
+  plannerPickupSpring,
   plannerReceiveSpring,
   type DragVector,
 } from '../motion/plannerMotion.ts'
@@ -30,15 +32,30 @@ type DragOverlayCardProps =
 export function DragOverlayCard({ card, substitute, dragVector, size }: DragOverlayCardProps) {
   const reduceMotion = useReducedMotion() ?? false
   const { state } = useSchedule()
+  const [isLifted, setIsLifted] = useState(() => reduceMotion)
+
+  useEffect(() => {
+    if (reduceMotion) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setIsLifted(true)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [reduceMotion])
 
   if (card) {
     const displayModel = selectNeedCardDisplayModel(state, card.id)
 
     return (
       <motion.div
-        initial={{ scale: 0.98, y: 0, rotate: 0, x: 0 }}
+        initial={getOverlayRestAnimation('need-card', reduceMotion)}
         animate={getOverlayDragAnimation('need-card', dragVector, reduceMotion)}
-        transition={plannerReceiveSpring}
+        transition={plannerPickupSpring}
         className="drag-overlay-card drag-overlay-card--card"
         style={{
           width: size?.width,
@@ -49,6 +66,7 @@ export function DragOverlayCard({ card, substitute, dragVector, size }: DragOver
           card={card}
           displayModel={displayModel}
           variant="overlay"
+          className={isLifted ? 'need-card--overlay-lifted' : undefined}
           markerSlot={
             <div className="need-card__markers">
               <AssigneeBadge
@@ -65,7 +83,7 @@ export function DragOverlayCard({ card, substitute, dragVector, size }: DragOver
 
   return (
     <motion.div
-      initial={{ scale: 0.98, y: 0, rotate: 0, x: 0 }}
+      initial={getOverlayRestAnimation('substitute', reduceMotion)}
       animate={getOverlayDragAnimation('substitute', dragVector, reduceMotion)}
       transition={plannerReceiveSpring}
       className="drag-overlay-card drag-overlay-card--substitute"

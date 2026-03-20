@@ -1,8 +1,9 @@
 import {
   defaultDropAnimationSideEffects,
+  type DropAnimationFunction,
   type DropAnimation,
 } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
+import { CSS, type Transform } from '@dnd-kit/utilities'
 import type { TargetAndTransition, Transition } from 'framer-motion'
 
 export type DragVector = {
@@ -28,6 +29,304 @@ function clamp(value: number, min: number, max: number) {
 
 function overlayRotation(vector: DragVector, maxRotation: number) {
   return clamp(vector.x * 0.035 + vector.y * 0.012, -maxRotation, maxRotation)
+}
+
+function interpolateDropTransform(
+  from: Transform,
+  to: Transform,
+  translateProgress: number,
+  scaleProgress: number,
+): Transform {
+  return {
+    x: from.x + (to.x - from.x) * translateProgress,
+    y: from.y + (to.y - from.y) * translateProgress,
+    scaleX: from.scaleX + (to.scaleX - from.scaleX) * scaleProgress,
+    scaleY: from.scaleY + (to.scaleY - from.scaleY) * scaleProgress,
+  }
+}
+
+function interpolateTranslateTransform(
+  from: Transform,
+  to: Transform,
+  progress: number,
+): Transform {
+  return {
+    x: from.x + (to.x - from.x) * progress,
+    y: from.y + (to.y - from.y) * progress,
+    scaleX: 1,
+    scaleY: 1,
+  }
+}
+
+function toScaleTransform(scaleX: number, scaleY: number, translateY = 0) {
+  return `translate3d(0px, ${translateY}px, 0px) scale(${scaleX}, ${scaleY}) rotate(0deg)`
+}
+
+function getDefaultDropKeyframes(initial: Transform, final: Transform, reduceMotion: boolean) {
+  const initialTransform = CSS.Transform.toString(initial)
+  const finalTransform = CSS.Transform.toString(final)
+
+  if (reduceMotion) {
+    const midTransform = CSS.Transform.toString(
+      interpolateDropTransform(initial, final, 0.62, 0.8),
+    )
+
+    return [
+      {
+        opacity: 1,
+        offset: 0,
+        transform: initialTransform,
+      },
+      {
+        opacity: 1,
+        offset: 0.56,
+        transform: midTransform,
+      },
+      {
+        opacity: 1,
+        offset: 1,
+        transform: finalTransform,
+      },
+    ]
+  }
+
+  return [
+    {
+      opacity: 1,
+      offset: 0,
+      transform: initialTransform,
+    },
+    {
+      opacity: 1,
+      offset: 0.18,
+      transform: CSS.Transform.toString(
+        interpolateDropTransform(initial, final, 0.1, 0.24),
+      ),
+    },
+    {
+      opacity: 1,
+      offset: 0.38,
+      transform: CSS.Transform.toString(
+        interpolateDropTransform(initial, final, 0.3, 0.54),
+      ),
+    },
+    {
+      opacity: 1,
+      offset: 0.62,
+      transform: CSS.Transform.toString(
+        interpolateDropTransform(initial, final, 0.58, 0.8),
+      ),
+    },
+    {
+      opacity: 1,
+      offset: 0.82,
+      transform: CSS.Transform.toString(
+        interpolateDropTransform(initial, final, 0.82, 0.94),
+      ),
+    },
+    {
+      opacity: 1,
+      offset: 1,
+      transform: finalTransform,
+    },
+  ]
+}
+
+function getCardWrapperStretchKeyframes(
+  currentTransform: string,
+  finalScaleX: number,
+  finalScaleY: number,
+  reduceMotion: boolean,
+) {
+  if (reduceMotion) {
+    return [
+      {
+        offset: 0,
+        transform: currentTransform,
+      },
+      {
+        offset: 0.54,
+        transform: toScaleTransform(
+          1 + (finalScaleX - 1) * 0.72,
+          1 + (finalScaleY - 1) * 0.72,
+          -0.5,
+        ),
+      },
+      {
+        offset: 1,
+        transform: toScaleTransform(finalScaleX, finalScaleY, 0),
+      },
+    ]
+  }
+
+  return [
+    {
+      offset: 0,
+      transform: currentTransform,
+    },
+    {
+      offset: 0.14,
+      transform: toScaleTransform(
+        1 + (finalScaleX - 1) * 0.18,
+        1 + (finalScaleY - 1) * 0.28,
+        -1.25,
+      ),
+    },
+    {
+      offset: 0.34,
+      transform: toScaleTransform(
+        1 + (finalScaleX - 1) * 0.44,
+        1 + (finalScaleY - 1) * 0.56,
+        -0.8,
+      ),
+    },
+    {
+      offset: 0.6,
+      transform: toScaleTransform(
+        1 + (finalScaleX - 1) * 0.74,
+        1 + (finalScaleY - 1) * 0.82,
+        -0.28,
+      ),
+    },
+    {
+      offset: 0.82,
+      transform: toScaleTransform(
+        1 + (finalScaleX - 1) * 0.92,
+        1 + (finalScaleY - 1) * 0.95,
+        -0.08,
+      ),
+    },
+    {
+      offset: 1,
+      transform: toScaleTransform(finalScaleX, finalScaleY, 0),
+    },
+  ]
+}
+
+function createValidNeedCardDropAnimation(
+  reduceMotion: boolean,
+): DropAnimationFunction {
+  const duration = getPlannerDropAnimationDuration('valid', reduceMotion)
+  const easing = 'cubic-bezier(0.16, 0.94, 0.22, 1)'
+  const shellEasing = 'cubic-bezier(0.18, 0.92, 0.22, 1)'
+  const sideEffects = defaultDropAnimationSideEffects({
+    className: {
+      active: 'planner-drop-source-settling',
+      dragOverlay: 'planner-drop-overlay-settling',
+    },
+  })
+
+  return ({ active, dragOverlay, transform, ...rest }) => {
+    const delta = {
+      x: dragOverlay.rect.left - active.rect.left,
+      y: dragOverlay.rect.top - active.rect.top,
+    }
+    const scale = {
+      scaleX:
+        transform.scaleX !== 1
+          ? (active.rect.width * transform.scaleX) / dragOverlay.rect.width
+          : 1,
+      scaleY:
+        transform.scaleY !== 1
+          ? (active.rect.height * transform.scaleY) / dragOverlay.rect.height
+          : 1,
+    }
+    const finalTransform = {
+      x: transform.x - delta.x,
+      y: transform.y - delta.y,
+      ...scale,
+    }
+    const cleanup = sideEffects({ active, dragOverlay, ...rest })
+    const cardWrapper = dragOverlay.node.querySelector('.drag-overlay-card--card') as
+      | HTMLElement
+      | null
+
+    if (!cardWrapper) {
+      const animation = dragOverlay.node.animate(
+        getDefaultDropKeyframes(transform, finalTransform, reduceMotion),
+        {
+          duration,
+          easing,
+          fill: 'forwards',
+        },
+      )
+
+      return new Promise<void>((resolve) => {
+        animation.onfinish = () => {
+          cleanup?.()
+          resolve()
+        }
+      })
+    }
+
+    const translateAnimation = dragOverlay.node.animate(
+      [
+        {
+          opacity: 1,
+          offset: 0,
+          transform: CSS.Transform.toString({
+            x: transform.x,
+            y: transform.y,
+            scaleX: 1,
+            scaleY: 1,
+          }),
+        },
+        {
+          opacity: 1,
+          offset: reduceMotion ? 0.62 : 0.48,
+          transform: CSS.Transform.toString(
+            interpolateTranslateTransform(transform, finalTransform, reduceMotion ? 0.64 : 0.54),
+          ),
+        },
+        {
+          opacity: 1,
+          offset: reduceMotion ? 0.86 : 0.8,
+          transform: CSS.Transform.toString(
+            interpolateTranslateTransform(transform, finalTransform, reduceMotion ? 0.9 : 0.86),
+          ),
+        },
+        {
+          opacity: 1,
+          offset: 1,
+          transform: CSS.Transform.toString({
+            x: finalTransform.x,
+            y: finalTransform.y,
+            scaleX: 1,
+            scaleY: 1,
+          }),
+        },
+      ],
+      {
+        duration,
+        easing,
+        fill: 'forwards',
+      },
+    )
+
+    const currentCardTransform = getComputedStyle(cardWrapper).transform
+    cardWrapper.animate(
+      getCardWrapperStretchKeyframes(
+        currentCardTransform === 'none'
+          ? toScaleTransform(1, 1, reduceMotion ? -0.5 : -1.4)
+          : currentCardTransform,
+        finalTransform.scaleX,
+        finalTransform.scaleY,
+        reduceMotion,
+      ),
+      {
+        duration,
+        easing: shellEasing,
+        fill: 'forwards',
+      },
+    )
+
+    return new Promise<void>((resolve) => {
+      translateAnimation.onfinish = () => {
+        cleanup?.()
+        resolve()
+      }
+    })
+  }
 }
 
 export const plannerLayoutSpring: Transition = {
@@ -58,6 +357,13 @@ export const plannerReceiveSpring: Transition = {
   mass: 0.62,
 }
 
+export const plannerPickupSpring: Transition = {
+  type: 'spring',
+  stiffness: 360,
+  damping: 28,
+  mass: 0.74,
+}
+
 export const plannerPulseTransition: Transition = {
   duration: 0.32,
   ease: [0.22, 1, 0.36, 1],
@@ -77,18 +383,30 @@ export function getOverlayDragAnimation(
 ): TargetAndTransition {
   if (reduceMotion) {
     return {
-      scale: kind === 'substitute' ? 1.03 : 1.015,
+      scale: kind === 'substitute' ? 1.03 : 1.012,
       x: 0,
-      y: kind === 'substitute' ? -6 : -4,
+      y: kind === 'substitute' ? -6 : -3,
       rotate: 0,
     }
   }
 
   return {
-    scale: kind === 'substitute' ? 1.06 : 1.032,
-    x: clamp(vector.x * 0.025, -7, 7),
-    y: kind === 'substitute' ? -10 : -7,
-    rotate: overlayRotation(vector, kind === 'substitute' ? 5.5 : 3.4),
+    scale: kind === 'substitute' ? 1.06 : 1.026,
+    x: clamp(vector.x * 0.022, -6, 6),
+    y: kind === 'substitute' ? -10 : -5,
+    rotate: overlayRotation(vector, kind === 'substitute' ? 5.5 : 2.6),
+  }
+}
+
+export function getOverlayRestAnimation(
+  kind: OverlayKind,
+  reduceMotion: boolean,
+): TargetAndTransition {
+  return {
+    scale: 1,
+    x: 0,
+    y: kind === 'substitute' ? (reduceMotion ? -1 : -2) : 0,
+    rotate: 0,
   }
 }
 
@@ -232,7 +550,7 @@ export function getPlannerDropAnimationDuration(
     return reduceMotion ? 160 : 210
   }
 
-  return reduceMotion ? 200 : 340
+  return reduceMotion ? 210 : 360
 }
 
 export function getPlannerDropHandoffDuration(reduceMotion: boolean) {
@@ -243,41 +561,18 @@ export function getPlannerDropAnimation(
   kind: PlannerDropAnimationKind,
   reduceMotion: boolean,
 ): DropAnimation {
-  const sideEffects = defaultDropAnimationSideEffects({
-    className: {
-      active: 'planner-drop-source-settling',
-      dragOverlay: 'planner-drop-overlay-settling',
-    },
-  })
-
   if (kind === 'invalid') {
     return {
       duration: getPlannerDropAnimationDuration(kind, reduceMotion),
       easing: 'cubic-bezier(0.2, 0.92, 0.28, 1)',
-      sideEffects,
+      sideEffects: defaultDropAnimationSideEffects({
+        className: {
+          active: 'planner-drop-source-settling',
+          dragOverlay: 'planner-drop-overlay-settling',
+        },
+      }),
     }
   }
 
-  return {
-    duration: getPlannerDropAnimationDuration(kind, reduceMotion),
-    easing: 'cubic-bezier(0.18, 0.88, 0.24, 1)',
-    sideEffects,
-    keyframes({ transform }) {
-      const finalTransform = CSS.Transform.toString(transform.final)
-      const initialTransform = CSS.Transform.toString(transform.initial)
-
-      return [
-        {
-          opacity: 1,
-          offset: 0,
-          transform: initialTransform,
-        },
-        {
-          opacity: 1,
-          offset: 1,
-          transform: finalTransform,
-        },
-      ]
-    },
-  }
+  return createValidNeedCardDropAnimation(reduceMotion)
 }
