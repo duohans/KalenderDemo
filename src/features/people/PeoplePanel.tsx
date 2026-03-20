@@ -1,5 +1,5 @@
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
+import { useScheduleState } from '../schedule/useSchedule.ts'
 import { PanelFrame } from '../shared/PanelFrame.tsx'
 import { PersonCard } from '../shared/PersonCard.tsx'
 
@@ -8,14 +8,15 @@ type PeoplePanelProps = {
 }
 
 export function PeoplePanel({ activeDrag }: PeoplePanelProps) {
-  const { state } = useSchedule()
-  const useCompactDensity = state.substituteOrder.length > 5
+  const substituteOrder = useScheduleState((state) => state.substituteOrder)
+  const substitutes = useScheduleState((state) => state.substitutes)
+  const useCompactDensity = substituteOrder.length > 5
 
   return (
     <PanelFrame
       title="Vikarer"
       tooltip="Rad = standardansvar. Kort = overstyring."
-      meta={<span className="panel-count">{state.substituteOrder.length}</span>}
+      meta={<span className="panel-count">{substituteOrder.length}</span>}
       tone="neutral"
       headerStyle="split"
       className="order-3"
@@ -28,10 +29,10 @@ export function PeoplePanel({ activeDrag }: PeoplePanelProps) {
           .filter(Boolean)
           .join(' ')}
       >
-        {state.substituteOrder.map((substituteId) => (
+        {substituteOrder.map((substituteId) => (
           <PersonCard
             key={substituteId}
-            person={state.substitutes[substituteId]}
+            person={substitutes[substituteId]}
             activeDrag={activeDrag}
           />
         ))}

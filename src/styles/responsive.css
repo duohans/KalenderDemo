@@ -1,0 +1,46 @@
+/* Responsive */
+@media (max-width: 1279px) {
+  .calendar-header-grid,
+  .calendar-row-grid {
+    grid-template-columns: 12.2rem repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .planner-shell__meta {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .planner-shell__actions {
+    justify-content: flex-start;
+  }
+
+  .planner-panel__header,
+  .planner-panel__body {
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+  }
+
+  .calendar-header-grid,
+  .calendar-row-grid {
+    grid-template-columns: 11.4rem repeat(6, minmax(0, 1fr));
+  }
+
+  .planner-detail-sheet {
+    left: 0.75rem;
+    right: 0.75rem;
+    top: auto;
+    bottom: 0.75rem;
+    width: auto;
+    max-height: min(72dvh, 36rem);
+  }
+
+  .detail-sheet__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-sheet__actions {
+    flex-direction: column;
+  }
+}

@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { createSeedPlannerState } from './seed.ts'
 import {
+  selectCellNeedCardIdMap,
   selectEffectiveAssigneeId,
   selectNeedCardDisplayModel,
   selectNeedCardConflict,
+  selectRowCards,
   selectRowDisplayModel,
   selectRowTitle,
 } from './selectors.ts'
@@ -109,5 +111,16 @@ describe('schedule selectors', () => {
 
     expect(selectNeedCardConflict(invalidState, 'card-samfunn-8c')).toBe(true)
     expect(selectNeedCardConflict(invalidState, 'card-matte-6a')).toBe(true)
+  })
+
+  it('memoizes scheduled cell and row derivations for the same state object', () => {
+    const state = createSeedPlannerState()
+
+    expect(selectCellNeedCardIdMap(state)).toBe(selectCellNeedCardIdMap(state))
+    expect(selectRowCards(state, 'row-2')).toBe(selectRowCards(state, 'row-2'))
+    expect(selectRowDisplayModel(state, 'row-2')).toBe(selectRowDisplayModel(state, 'row-2'))
+    expect(selectNeedCardDisplayModel(state, 'card-naturfag-7b')).toBe(
+      selectNeedCardDisplayModel(state, 'card-naturfag-7b'),
+    )
   })
 })

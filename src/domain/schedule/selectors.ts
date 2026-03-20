@@ -42,6 +42,23 @@ export type NeedCardDisplayModel = {
 
 const NEUTRAL_ACCENT = '#d1d5db'
 
+type ScheduledIndex = {
+  cards: ScheduledNeedCard[]
+  cellNeedCardIdMap: Map<string, string>
+  cellCollisionCountMap: Map<string, number>
+  rowCardsMap: Map<string, ScheduledNeedCard[]>
+}
+
+const scheduledIndexCache = new WeakMap<PlannerState, ScheduledIndex>()
+const rowTeacherIdsCache = new WeakMap<PlannerState, Map<string, string[]>>()
+const rowTeachersCache = new WeakMap<PlannerState, Map<string, Teacher[]>>()
+const rowTitleCache = new WeakMap<PlannerState, Map<string, RowTitle>>()
+const rowDisplayModelCache = new WeakMap<PlannerState, Map<string, RowDisplayModel | null>>()
+const needCardDisplayModelCache = new WeakMap<
+  PlannerState,
+  Map<string, NeedCardDisplayModel | null>
+>()
+
 function isScheduledNeedCard(card: NeedCard): card is ScheduledNeedCard {
   return (
     card.placement === 'scheduled' &&
@@ -93,6 +110,67 @@ function splitNeedCardTitle(title: string) {
   }
 }
 
+function getStateScopedMap<T>(cache: WeakMap<PlannerState, Map<string, T>>, state: PlannerState) {
+  let scopedMap = cache.get(state)
+
+  if (!scopedMap) {
+    scopedMap = new Map<string, T>()
+    cache.set(state, scopedMap)
+  }
+
+  return scopedMap
+}
+
+function getScheduledIndex(state: PlannerState): ScheduledIndex {
+  const cached = scheduledIndexCache.get(state)
+
+  if (cached) {
+    return cached
+  }
+
+  const cards: ScheduledNeedCard[] = []
+  const cellNeedCardIdMap = new Map<string, string>()
+  const cellCollisionCountMap = new Map<string, number>()
+  const rowCardsMap = new Map<string, ScheduledNeedCard[]>()
+
+  state.needCardOrder.forEach((cardId) => {
+    const card = state.needCards[cardId]
+
+    if (!card || !isScheduledNeedCard(card)) {
+      return
+    }
+
+    cards.push(card)
+
+    const cellKey = buildCellKey(card.rowId, card.timeBlockId)
+    cellNeedCardIdMap.set(cellKey, card.id)
+    cellCollisionCountMap.set(cellKey, (cellCollisionCountMap.get(cellKey) ?? 0) + 1)
+
+    const rowCards = rowCardsMap.get(card.rowId) ?? []
+    rowCards.push(card)
+    rowCardsMap.set(card.rowId, rowCards)
+  })
+
+  rowCardsMap.forEach((rowCards) => {
+    rowCards.sort((left, right) => {
+      const byTime =
+        TIME_BLOCK_ORDER[left.timeBlockId] - TIME_BLOCK_ORDER[right.timeBlockId]
+
+      return byTime !== 0 ? byTime : left.title.localeCompare(right.title, 'nb')
+    })
+  })
+
+  const nextIndex = {
+    cards,
+    cellNeedCardIdMap,
+    cellCollisionCountMap,
+    rowCardsMap,
+  }
+
+  scheduledIndexCache.set(state, nextIndex)
+  return nextIndex
+}
+
 export function buildCellKey(rowId: string, timeBlockId: TimeBlockId) {
   return `${rowId}::${timeBlockId}`
 }
@@ -117,10 +195,7 @@ export function selectSubstituteById(
 }
 
 export function selectScheduledNeedCards(state: PlannerState) {
-  return state.needCardOrder
-    .map((cardId) => state.needCards[cardId])
-    .filter((card): card is NeedCard => Boolean(card))
-    .filter(isScheduledNeedCard)
+  return getScheduledIndex(state).cards
 }
 
 export function selectUnscheduledNeedCardIds(state: PlannerState) {
@@ -130,13 +205,7 @@ export function selectUnscheduledNeedCardIds(state: PlannerState) {
 }
 
 export function selectCellNeedCardIdMap(state: PlannerState) {
-  const map = new Map<string, string>()
-
-  selectScheduledNeedCards(state).forEach((card) => {
-    map.set(buildCellKey(card.rowId, card.timeBlockId), card.id)
-  })
-
-  return map
+  return getScheduledIndex(state).cellNeedCardIdMap
 }
 
 export function selectNeedCardIdAtCell(
@@ -144,35 +213,49 @@ export function selectNeedCardIdAtCell(
   rowId: string,
   timeBlockId: TimeBlockId,
 ) {
-  return selectCellNeedCardIdMap(state).get(buildCellKey(rowId, timeBlockId)) ?? null
+  return getScheduledIndex(state).cellNeedCardIdMap.get(buildCellKey(rowId, timeBlockId)) ?? null
 }
 
 export function selectRowCards(state: PlannerState, rowId: string) {
-  return selectScheduledNeedCards(state)
-    .filter((card) => card.rowId === rowId)
-    .sort((left, right) => {
-      const byTime =
-        TIME_BLOCK_ORDER[left.timeBlockId] - TIME_BLOCK_ORDER[right.timeBlockId]
-
-      return byTime !== 0 ? byTime : left.title.localeCompare(right.title, 'nb')
-    })
+  return getScheduledIndex(state).rowCardsMap.get(rowId) ?? []
 }
 
 export function selectRowTeacherIds(state: PlannerState, rowId: string) {
-  const teacherIds = new Set(
-    selectRowCards(state, rowId).map((card) => card.sourceTeacherId),
-  )
+  const cached = getStateScopedMap(rowTeacherIdsCache, state).get(rowId)
 
-  return state.teacherOrder.filter((teacherId) => teacherIds.has(teacherId))
+  if (cached) {
+    return cached
+  }
+
+  const teacherIds = new Set(selectRowCards(state, rowId).map((card) => card.sourceTeacherId))
+  const nextTeacherIds = state.teacherOrder.filter((teacherId) => teacherIds.has(teacherId))
+
+  getStateScopedMap(rowTeacherIdsCache, state).set(rowId, nextTeacherIds)
+  return nextTeacherIds
 }
 
 export function selectRowTeachers(state: PlannerState, rowId: string) {
-  return selectRowTeacherIds(state, rowId)
+  const cached = getStateScopedMap(rowTeachersCache, state).get(rowId)
+
+  if (cached) {
+    return cached
+  }
+
+  const nextTeachers = selectRowTeacherIds(state, rowId)
     .map((teacherId) => state.teachers[teacherId])
     .filter((teacher): teacher is Teacher => Boolean(teacher))
+
+  getStateScopedMap(rowTeachersCache, state).set(rowId, nextTeachers)
+  return nextTeachers
 }
 
 export function selectRowTitle(state: PlannerState, rowId: string): RowTitle {
+  const cached = getStateScopedMap(rowTitleCache, state).get(rowId)
+
+  if (cached) {
+    return cached
+  }
+
   const row = state.rows[rowId]
 
   if (!row) {
@@ -187,24 +270,37 @@ export function selectRowTitle(state: PlannerState, rowId: string): RowTitle {
     const responsibleFirstName = toFirstName(responsible.name)
     const title = `${possessiveFirstName(responsibleFirstName)} vikartimer`
 
-    return {
+    const nextTitle = {
       full: title,
       compact: title,
     }
+
+    getStateScopedMap(rowTitleCache, state).set(rowId, nextTitle)
+    return nextTitle
   }
 
   const title = formatTeacherTitle(teacherFirstNames)
 
-  return {
+  const nextTitle = {
     full: title,
     compact: title,
   }
+
+  getStateScopedMap(rowTitleCache, state).set(rowId, nextTitle)
+  return nextTitle
 }
 
 export function selectRowDisplayModel(state: PlannerState, rowId: string): RowDisplayModel | null {
+  const cached = getStateScopedMap(rowDisplayModelCache, state).get(rowId)
+
+  if (cached !== undefined) {
+    return cached
+  }
+
   const row = state.rows[rowId]
 
   if (!row) {
+    getStateScopedMap(rowDisplayModelCache, state).set(rowId, null)
     return null
   }
 
@@ -213,7 +309,7 @@ export function selectRowDisplayModel(state: PlannerState, rowId: string): RowDi
   const teachers = selectRowTeachers(state, rowId)
   const cardCount = selectRowCards(state, rowId).length
 
-  return {
+  const nextDisplayModel = {
     row,
     title,
     responsible,
@@ -226,6 +322,9 @@ export function selectRowDisplayModel(state: PlannerState, rowId: string): RowDi
         : `${cardCount} ${cardCount === 1 ? 'time' : 'timer'}`,
     canClearResponsible: Boolean(responsible),
   }
+
+  getStateScopedMap(rowDisplayModelCache, state).set(rowId, nextDisplayModel)
+  return nextDisplayModel
 }
 
 export function selectEffectiveAssigneeId(state: PlannerState, cardId: string) {
@@ -292,10 +391,10 @@ export function selectNeedCardConflict(state: PlannerState, cardId: string) {
     return true
   }
 
-  const collisionCount = selectScheduledNeedCards(state).filter(
-    (candidate) =>
-      candidate.rowId === card.rowId && candidate.timeBlockId === card.timeBlockId,
-  ).length
+  const collisionCount =
+    getScheduledIndex(state).cellCollisionCountMap.get(
+      buildCellKey(card.rowId, card.timeBlockId),
+    ) ?? 0
 
   return collisionCount > 1
 }
@@ -304,9 +403,16 @@ export function selectNeedCardDisplayModel(
   state: PlannerState,
   cardId: string,
 ): NeedCardDisplayModel | null {
+  const cached = getStateScopedMap(needCardDisplayModelCache, state).get(cardId)
+
+  if (cached !== undefined) {
+    return cached
+  }
+
   const card = state.needCards[cardId]
 
   if (!card) {
+    getStateScopedMap(needCardDisplayModelCache, state).set(cardId, null)
     return null
   }
 
@@ -321,7 +427,7 @@ export function selectNeedCardDisplayModel(
       : NEUTRAL_ACCENT
   const { classLabel, subjectLabel } = splitNeedCardTitle(card.title)
 
-  return {
+  const nextDisplayModel = {
     card,
     teacher,
     effectiveAssignee,
@@ -334,6 +440,9 @@ export function selectNeedCardDisplayModel(
     assigneeAccent: effectiveAssignee?.accentColor ?? rowAccent,
     statusLabel: card.placement === 'scheduled' ? 'Planlagt' : 'Uplanlagt',
   }
+
+  getStateScopedMap(needCardDisplayModelCache, state).set(cardId, nextDisplayModel)
+  return nextDisplayModel
 }
 
 export function selectCanDropNeedCardInCell(
@@ -349,15 +458,9 @@ export function selectCanDropNeedCardInCell(
     return false
   }
 
-  return selectScheduledNeedCards(state).every((candidate) => {
-    if (candidate.id === card.id) {
-      return true
-    }
+  const occupyingCardId = selectNeedCardIdAtCell(state, rowId, timeBlockId)
 
-    return !(
-      candidate.rowId === rowId && candidate.timeBlockId === timeBlockId
-    )
-  })
+  return occupyingCardId === null || occupyingCardId === card.id
 }
 
 export function selectRow(state: PlannerState, rowId: string): Row | null {

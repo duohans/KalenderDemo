@@ -1,12 +1,11 @@
 import { useDroppable } from '@dnd-kit/core'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { LayoutGrid, UserCheck, UserPlus, X } from 'lucide-react'
-import type { CSSProperties, KeyboardEvent } from 'react'
+import type { CSSProperties } from 'react'
 
 import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
-import type { PlannerSelection } from '../layout/plannerSelection.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
   getTargetActivationAnimation,
@@ -14,26 +13,28 @@ import {
   plannerReceiveSpring,
   plannerTargetSpring,
 } from '../motion/plannerMotion.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
+import {
+  useScheduleDispatch,
+  useScheduleSelection,
+  useScheduleSelectionActions,
+  useScheduleState,
+} from '../schedule/useSchedule.ts'
 
 type RowHeaderDropZoneProps = {
   rowId: string
   activeDrag: PlannerDragItem | null
-  isSelected: boolean
-  onClearRowResponsible: (rowId: string) => void
-  onOpenDetails: (selection: PlannerSelection) => void
 }
 
 export function RowHeaderDropZone({
   rowId,
   activeDrag,
-  isSelected,
-  onClearRowResponsible,
-  onOpenDetails,
 }: RowHeaderDropZoneProps) {
-  const { state } = useSchedule()
+  const state = useScheduleState((plannerState) => plannerState)
+  const selection = useScheduleSelection()
+  const dispatch = useScheduleDispatch()
+  const { openSelection } = useScheduleSelectionActions()
   const reduceMotion = useReducedMotion() ?? false
-  const { recentEvent } = usePlannerDragFeedback()
+  const { recentEvent, pushMotionEvent } = usePlannerDragFeedback()
 
   const { isOver, setNodeRef } = useDroppable({
     id: `row-header:${rowId}`,
@@ -61,19 +62,7 @@ export function RowHeaderDropZone({
     recentEvent?.type === 'assignSubstituteToRow' && recentEvent.rowId === rowId
   const isClearingResponsible =
     recentEvent?.type === 'clearRowResponsible' && recentEvent.rowId === rowId
-
-  const openDetails = () => {
-    onOpenDetails({ kind: 'row', rowId })
-  }
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return
-    }
-
-    event.preventDefault()
-    openDetails()
-  }
+  const isSelected = selection?.kind === 'row' && selection.rowId === rowId
 
   return (
     <motion.div
@@ -109,20 +98,19 @@ export function RowHeaderDropZone({
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
-            onClearRowResponsible(rowId)
+            pushMotionEvent({ type: 'clearRowResponsible', rowId })
+            dispatch({ type: 'clearRowResponsible', rowId })
           }}
           aria-label="Fjern radansvarlig"
         >
           <X size={14} strokeWidth={2.25} aria-hidden="true" />
         </button>
       ) : null}
-      <motion.div
+      <motion.button
         layout
-        role="button"
-        tabIndex={0}
+        type="button"
         className="row-header-button"
-        onClick={openDetails}
-        onKeyDown={handleKeyDown}
+        onClick={() => openSelection({ kind: 'row', rowId })}
         aria-haspopup="dialog"
         aria-expanded={isSelected}
         aria-label={`Åpne detaljer for ${title.full}`}
@@ -241,7 +229,7 @@ export function RowHeaderDropZone({
             </motion.span>
           </div>
         </div>
-      </motion.div>
+      </motion.button>
     </motion.div>
   )
 }

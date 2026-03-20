@@ -5,10 +5,6 @@ import { Check } from 'lucide-react'
 import { type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectUnscheduledNeedCardIds } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
-import {
-  isNeedCardSelection,
-  type PlannerSelection,
-} from '../layout/plannerSelection.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
   getReceiveAnimation,
@@ -16,22 +12,18 @@ import {
   plannerPulseTransition,
   plannerTargetSpring,
 } from '../motion/plannerMotion.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
+import {
+  useScheduleState,
+} from '../schedule/useSchedule.ts'
 import { PanelFrame } from '../shared/PanelFrame.tsx'
 import { TaskCard } from '../shared/TaskCard.tsx'
 
 type TasksPanelProps = {
   activeDrag: PlannerDragItem | null
-  selection: PlannerSelection | null
-  onOpenSelection: (selection: PlannerSelection) => void
 }
 
-export function TasksPanel({
-  activeDrag,
-  selection,
-  onOpenSelection,
-}: TasksPanelProps) {
-  const { state } = useSchedule()
+export function TasksPanel({ activeDrag }: TasksPanelProps) {
+  const state = useScheduleState((plannerState) => plannerState)
   const reduceMotion = useReducedMotion() ?? false
   const { recentEvent } = usePlannerDragFeedback()
   const cardIds = selectUnscheduledNeedCardIds(state)
@@ -88,8 +80,6 @@ export function TasksPanel({
                 key={cardId}
                 card={state.needCards[cardId]}
                 activeDrag={activeDrag}
-                isSelected={isNeedCardSelection(selection, cardId)}
-                onOpenDetails={onOpenSelection}
                 variant="panel"
               />
             ))

@@ -1,7 +1,7 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { motion, useReducedMotion } from 'framer-motion'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type KeyboardEvent } from 'react'
 
 import {
   canDropOnTarget,
@@ -12,8 +12,13 @@ import {
   selectNeedCardDisplayModel,
 } from '../../domain/schedule/selectors.ts'
 import type { NeedCard } from '../../domain/schedule/types.ts'
+import {
+  usePlannerDispatch,
+  usePlannerSelection,
+  usePlannerSelectionActions,
+  usePlannerState,
+} from '../../store/plannerStore.ts'
 import { cx } from '../../lib/cx.ts'
-import type { PlannerSelection } from '../layout/plannerSelection.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
   getReceiveAnimation,
@@ -24,26 +29,24 @@ import {
   plannerPulseTransition,
   plannerRejectTransition,
 } from '../motion/plannerMotion.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
 import { AssigneeBadge } from './AssigneeBadge.tsx'
 import { NeedCardVisual } from './NeedCardVisual.tsx'
 
 type TaskCardProps = {
   card: NeedCard
   activeDrag: PlannerDragItem | null
-  isSelected: boolean
-  onOpenDetails: (selection: PlannerSelection) => void
   variant?: 'grid' | 'panel' | 'overlay' | 'detail'
 }
 
 export function TaskCard({
   card,
   activeDrag,
-  isSelected,
-  onOpenDetails,
   variant = 'grid',
 }: TaskCardProps) {
-  const { state, dispatch } = useSchedule()
+  const state = usePlannerState((plannerState) => plannerState)
+  const dispatch = usePlannerDispatch()
+  const selection = usePlannerSelection()
+  const { openSelection } = usePlannerSelectionActions()
   const reduceMotion = useReducedMotion() ?? false
   const { rejectedDrag, recentEvent, dropHandoff, pushMotionEvent } =
     usePlannerDragFeedback()
@@ -52,6 +55,7 @@ export function TaskCard({
   const cleanupPointerListenersRef = useRef<(() => void) | null>(null)
 
   const displayModel = selectNeedCardDisplayModel(state, card.id)
+  const isSelected = selection?.kind === 'need-card' && selection.cardId === card.id
   const assignmentMode = displayModel?.assignmentMode ?? 'unassigned'
 
   useEffect(() => {
@@ -145,6 +149,7 @@ export function TaskCard({
       className="need-card-host h-full min-h-0"
     >
       <motion.div
+        aria-haspopup="dialog"
         layout
         initial={false}
         animate={articleAnimation}
@@ -196,7 +201,15 @@ export function TaskCard({
             return
           }
 
-          onOpenDetails({ kind: 'need-card', cardId: card.id })
+          openSelection({ kind: 'need-card', cardId: card.id })
+        }}
+        onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.key !== 'Enter' && event.key !== ' ') {
+            return
+          }
+
+          event.preventDefault()
+          openSelection({ kind: 'need-card', cardId: card.id })
         }}
         aria-label={`Kort ${card.title}`}
         className="h-full min-h-0"

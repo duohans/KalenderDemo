@@ -8,8 +8,9 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
+import { Redo2, Undo2 } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   getPlannerDragItem,
@@ -18,120 +19,149 @@ import {
   resolveDrop,
   type PlannerDragItem,
 } from '../../domain/schedule/dnd.ts'
+import type { PlannerAction } from '../../domain/schedule/types.ts'
 import {
   actionToDropHandoff,
-  actionToMotionEvent,
-  type PlannerDropHandoffBase,
-  type PlannerDropHandoff,
   PlannerDragFeedbackProvider,
-  type PlannerMotionEventBase,
   type PlannerMotionEvent,
   type RejectedDrag,
 } from '../motion/PlannerDragFeedbackContext.tsx'
-import { useSchedule } from '../schedule/useSchedule.ts'
-import { CalendarGrid } from '../calendar/CalendarGrid.tsx'
-import type { PlannerSelection } from './plannerSelection.ts'
+import { useDragFeedbackTimers } from '../motion/useDragFeedbackTimers.ts'
 import {
   getPlannerDropAnimation,
-  getPlannerDropHandoffDuration,
 } from '../motion/plannerMotion.ts'
+import {
+  useSchedule,
+  useScheduleHistoryActions,
+  useScheduleSelectionActions,
+} from '../schedule/useSchedule.ts'
+import { CalendarGrid } from '../calendar/CalendarGrid.tsx'
 import { PeoplePanel } from '../people/PeoplePanel.tsx'
 import { DragOverlayCard } from '../shared/DragOverlayCard.tsx'
 import { TasksPanel } from '../tasks/TasksPanel.tsx'
+import { PlannerDetailSheet } from './PlannerDetailSheet.tsx'
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName
+
+  return (
+    target.isContentEditable ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  )
+}
+
+function describeMotionEvent(event: PlannerMotionEvent | null) {
+  if (!event) {
+    return ''
+  }
+
+  switch (event.type) {
+    case 'assignSubstituteToNeedCard':
+      return 'Direkte vikartildeling lagret.'
+    case 'assignSubstituteToRow':
+      return 'Radansvar oppdatert.'
+    case 'clearNeedCardExplicitAssignee':
+      return 'Direkte vikartildeling fjernet.'
+    case 'clearRowResponsible':
+      return 'Radansvar fjernet.'
+    case 'moveNeedCardToCell':
+      return `Kort flyttet til ${event.timeBlockId}.`
+    case 'moveNeedCardToUnscheduled':
+      return 'Kort sendt tilbake til Uplanlagt.'
+    default:
+      return ''
+  }
+}
+
+function describeRejectedDrag(rejectedDrag: RejectedDrag | null) {
+  if (!rejectedDrag) {
+    return ''
+  }
+
+  return rejectedDrag.item.type === 'need-card'
+    ? 'Kortet kan ikke slippes der.'
+    : 'Vikaren kan ikke slippes der.'
+}
 
 export function PlannerPage() {
   const { state, dispatch } = useSchedule()
+  const { closeSelection } = useScheduleSelectionActions()
+  const { canRedo, canUndo, redo, undo } = useScheduleHistoryActions()
   const [activeDrag, setActiveDrag] = useState<PlannerDragItem | null>(null)
-  const [selection, setSelection] = useState<PlannerSelection | null>(null)
   const [dragVector, setDragVector] = useState({ x: 0, y: 0 })
   const [overlaySize, setOverlaySize] = useState<{ width: number; height: number } | null>(null)
   const [dropAnimationKind, setDropAnimationKind] = useState<'valid' | 'invalid'>('valid')
-  const [dropHandoff, setDropHandoff] = useState<PlannerDropHandoff | null>(null)
-  const [recentEvent, setRecentEvent] = useState<PlannerMotionEvent | null>(null)
-  const [rejectedDrag, setRejectedDrag] = useState<RejectedDrag | null>(null)
-  const feedbackSequenceRef = useRef(0)
-  const dropHandoffTimerRef = useRef<number | null>(null)
-  const recentEventTimerRef = useRef<number | null>(null)
-  const rejectedDragTimerRef = useRef<number | null>(null)
+  const [manualAnnouncement, setManualAnnouncement] = useState('')
   const reduceMotion = useReducedMotion() ?? false
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
     }),
   )
+  const {
+    clearDropHandoff,
+    dropHandoff,
+    pushDropHandoff,
+    pushMotionEvent,
+    pushRejectedDrag,
+    recentEvent,
+    rejectedDrag,
+  } = useDragFeedbackTimers({ reduceMotion })
+  const shortcutModifier =
+    typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'
 
   useEffect(() => {
-    return () => {
-      if (dropHandoffTimerRef.current !== null) {
-        window.clearTimeout(dropHandoffTimerRef.current)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) {
+        return
       }
 
-      if (recentEventTimerRef.current !== null) {
-        window.clearTimeout(recentEventTimerRef.current)
+      const metaOrCtrl = event.metaKey || event.ctrlKey
+
+      if (!metaOrCtrl || event.key.toLowerCase() !== 'z') {
+        return
       }
 
-      if (rejectedDragTimerRef.current !== null) {
-        window.clearTimeout(rejectedDragTimerRef.current)
+      event.preventDefault()
+
+      if (event.shiftKey) {
+        if (!canRedo) {
+          return
+        }
+
+        redo()
+        setManualAnnouncement('Gjorde om siste endring.')
+        return
       }
-    }
-  }, [])
 
-  const clearDropHandoff = () => {
-    if (dropHandoffTimerRef.current !== null) {
-      window.clearTimeout(dropHandoffTimerRef.current)
-      dropHandoffTimerRef.current = null
-    }
+      if (!canUndo) {
+        return
+      }
 
-    setDropHandoff(null)
-  }
-
-  const pushDropHandoff = (event: PlannerDropHandoffBase) => {
-    const key = ++feedbackSequenceRef.current
-
-    if (dropHandoffTimerRef.current !== null) {
-      window.clearTimeout(dropHandoffTimerRef.current)
+      undo()
+      setManualAnnouncement('Angret siste endring.')
     }
 
-    setDropHandoff({ ...event, key })
-    dropHandoffTimerRef.current = window.setTimeout(() => {
-      setDropHandoff((current) => (current?.key === key ? null : current))
-      dropHandoffTimerRef.current = null
-    }, getPlannerDropHandoffDuration(reduceMotion))
-  }
+    window.addEventListener('keydown', handleKeyDown)
 
-  const pushMotionEvent = (event: PlannerMotionEventBase) => {
-    const key = ++feedbackSequenceRef.current
-    const nextEvent: PlannerMotionEvent = { ...event, key }
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [canRedo, canUndo, redo, undo])
 
-    if (recentEventTimerRef.current !== null) {
-      window.clearTimeout(recentEventTimerRef.current)
-    }
-
-    setRecentEvent(nextEvent)
-    recentEventTimerRef.current = window.setTimeout(() => {
-      setRecentEvent((current) => (current?.key === key ? null : current))
-      recentEventTimerRef.current = null
-    }, reduceMotion ? 140 : 520)
-  }
-
-  const pushRejectedDrag = (item: PlannerDragItem) => {
-    const key = ++feedbackSequenceRef.current
-
-    if (rejectedDragTimerRef.current !== null) {
-      window.clearTimeout(rejectedDragTimerRef.current)
-    }
-
-    setRejectedDrag({ item, key })
-    rejectedDragTimerRef.current = window.setTimeout(() => {
-      setRejectedDrag((current) => (current?.key === key ? null : current))
-      rejectedDragTimerRef.current = null
-    }, reduceMotion ? 120 : 360)
+  const handleAction = (action: PlannerAction) => {
+    pushMotionEvent(action)
+    dispatch(action)
   }
 
   const handleDragStart = (event: DragStartEvent) => {
     const initialRect = event.active.rect.current.initial
 
-    setSelection(null)
+    closeSelection()
     setActiveDrag(getPlannerDragItem(event.active))
     setDragVector({ x: 0, y: 0 })
     setOverlaySize(
@@ -161,12 +191,7 @@ export function PlannerPage() {
         pushDropHandoff(dropHandoffEvent)
       }
 
-      dispatch(action)
-      const motionEvent = actionToMotionEvent(action)
-
-      if (motionEvent) {
-        pushMotionEvent(motionEvent)
-      }
+      handleAction(action)
     } else if (dragItem) {
       setDropAnimationKind('invalid')
       clearDropHandoff()
@@ -177,17 +202,14 @@ export function PlannerPage() {
     setDragVector({ x: 0, y: 0 })
   }
 
-  const handleClearRowResponsible = (rowId: string) => {
-    pushMotionEvent({ type: 'clearRowResponsible', rowId })
-    dispatch({ type: 'clearRowResponsible', rowId })
-  }
-
   const overlayCard =
     activeDrag?.type === 'need-card' ? state.needCards[activeDrag.cardId] : undefined
   const overlaySubstitute =
     activeDrag?.type === 'substitute'
       ? state.substitutes[activeDrag.substituteId]
       : undefined
+  const announcement =
+    describeMotionEvent(recentEvent) || describeRejectedDrag(rejectedDrag) || manualAnnouncement
 
   return (
     <DndContext
@@ -217,20 +239,56 @@ export function PlannerPage() {
         }}
       >
         <main className="planner-shell min-h-screen px-2 py-2.5 md:px-3 md:py-3.5 xl:px-3 xl:py-4">
+          <div className="planner-shell__meta">
+            <div>
+              <p className="panel-kicker">Substituttavle</p>
+              <h1 className="planner-shell__title planner-heading">Dagsplan</h1>
+              <p className="planner-shell__copy">
+                Dra kort mellom rader og tidsslots, eller bruk detaljarket for tastaturvennlige endringer.
+              </p>
+            </div>
+            <div className="planner-shell__actions">
+              <button
+                type="button"
+                className="action-button action-button--secondary"
+                disabled={!canUndo}
+                onClick={() => {
+                  undo()
+                  setManualAnnouncement('Angret siste endring.')
+                }}
+              >
+                <Undo2 size={16} strokeWidth={2.25} aria-hidden="true" />
+                Angre
+              </button>
+              <button
+                type="button"
+                className="action-button action-button--secondary"
+                disabled={!canRedo}
+                onClick={() => {
+                  redo()
+                  setManualAnnouncement('Gjorde om siste endring.')
+                }}
+              >
+                <Redo2 size={16} strokeWidth={2.25} aria-hidden="true" />
+                Gjør om
+              </button>
+              <div className="planner-shortcut" aria-hidden="true">
+                <kbd>{shortcutModifier}</kbd>
+                <span>+</span>
+                <kbd>Z</kbd>
+              </div>
+            </div>
+          </div>
+
           <div className="mx-auto grid w-full max-w-[126rem] gap-2.5 xl:grid-cols-[15.5rem_minmax(0,1fr)_15.5rem]">
-            <TasksPanel
-              activeDrag={activeDrag}
-              selection={selection}
-              onOpenSelection={setSelection}
-            />
-            <CalendarGrid
-              activeDrag={activeDrag}
-              selection={selection}
-              onClearRowResponsible={handleClearRowResponsible}
-              onOpenSelection={setSelection}
-              onCloseSelection={() => setSelection(null)}
-            />
+            <TasksPanel activeDrag={activeDrag} />
+            <CalendarGrid activeDrag={activeDrag} />
             <PeoplePanel activeDrag={activeDrag} />
+          </div>
+
+          <PlannerDetailSheet />
+          <div className="sr-only" aria-live="polite" aria-atomic="true">
+            {announcement}
           </div>
         </main>
 

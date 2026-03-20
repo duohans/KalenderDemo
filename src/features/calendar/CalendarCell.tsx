@@ -6,7 +6,6 @@ import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd
 import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
 import type { TimeBlockId } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
-import type { PlannerSelection } from '../layout/plannerSelection.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
   getReceiveAnimation,
@@ -14,7 +13,9 @@ import {
   plannerPulseTransition,
   plannerTargetSpring,
 } from '../motion/plannerMotion.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
+import {
+  useScheduleState,
+} from '../schedule/useSchedule.ts'
 import { TaskCard } from '../shared/TaskCard.tsx'
 import { EmptyCellState } from './EmptyCellState.tsx'
 
@@ -23,8 +24,6 @@ type CalendarCellProps = {
   timeBlockId: TimeBlockId
   cardId: string | null
   activeDrag: PlannerDragItem | null
-  isSelected: boolean
-  onOpenCard: (selection: PlannerSelection) => void
 }
 
 export function CalendarCell({
@@ -32,10 +31,8 @@ export function CalendarCell({
   timeBlockId,
   cardId,
   activeDrag,
-  isSelected,
-  onOpenCard,
 }: CalendarCellProps) {
-  const { state } = useSchedule()
+  const state = useScheduleState((plannerState) => plannerState)
   const reduceMotion = useReducedMotion() ?? false
   const { recentEvent } = usePlannerDragFeedback()
   const rowDisplayModel = selectRowDisplayModel(state, rowId)
@@ -65,6 +62,7 @@ export function CalendarCell({
   return (
     <motion.div
       ref={setNodeRef}
+      data-testid={`calendar-cell-${rowId}-${timeBlockId}`}
       layout
       animate={
         isReceivingCard
@@ -84,18 +82,12 @@ export function CalendarCell({
       className={cx(
         'calendar-cell',
         !card && 'calendar-cell--empty',
-        isSelected && 'selection-active',
         isNeedCardDragActive && isOver && canAcceptNeedCard && 'drop-target-valid',
         isNeedCardDragActive && isOver && !canAcceptNeedCard && 'drop-target-invalid',
       )}
     >
       {card ? (
-        <TaskCard
-          card={card}
-          activeDrag={activeDrag}
-          isSelected={isSelected}
-          onOpenDetails={onOpenCard}
-        />
+        <TaskCard card={card} activeDrag={activeDrag} />
       ) : (
         <EmptyCellState
           isNeedCardDragActive={Boolean(isNeedCardDragActive)}

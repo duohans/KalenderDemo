@@ -1,13 +1,41 @@
-import { useContext } from 'react'
-
-import { ScheduleContext } from './ScheduleContext.ts'
+import type { PlannerAction, PlannerState } from '../../domain/schedule/types.ts'
+import {
+  usePlannerDispatch,
+  usePlannerHistory,
+  usePlannerSelection,
+  usePlannerSelectionActions,
+  usePlannerState,
+} from '../../store/plannerStore.ts'
 
 export function useSchedule() {
-  const context = useContext(ScheduleContext)
+  const state = usePlannerState((plannerState) => plannerState)
+  const dispatch = usePlannerDispatch()
 
-  if (!context) {
-    throw new Error('useSchedule must be used inside ScheduleProvider')
-  }
+  return { state, dispatch }
+}
 
-  return context
+export function useScheduleState<T>(selector: (state: PlannerState) => T) {
+  return usePlannerState(selector)
+}
+
+export function useScheduleDispatch() {
+  return usePlannerDispatch()
+}
+
+export function useScheduleSelection() {
+  return usePlannerSelection()
+}
+
+export function useScheduleSelectionActions() {
+  return usePlannerSelectionActions()
+}
+
+export function useScheduleHistoryActions() {
+  return usePlannerHistory()
+}
+
+export function useScheduleDispatchAction() {
+  const dispatch = usePlannerDispatch()
+
+  return (action: PlannerAction) => dispatch(action)
 }

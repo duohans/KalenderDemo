@@ -2,11 +2,13 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { resetPlannerStore } from '../store/plannerStore.ts'
 import App from './App.tsx'
 
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
+  resetPlannerStore()
 })
 
 describe('App', () => {
@@ -84,5 +86,54 @@ describe('App', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(within(card).queryByLabelText(/direkte: sara lie/i)).not.toBeInTheDocument()
     expect(within(card).getByLabelText(/via rad: kasper dahl/i)).toBeInTheDocument()
+  })
+
+  it('assigns row responsibility from the detail sheet and supports undo', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /åpne detaljer for camillas timer/i }))
+
+    const dialog = screen.getByRole('dialog')
+    await user.selectOptions(within(dialog).getByLabelText('Vikar'), 'sub-kasper')
+    await user.click(within(dialog).getByRole('button', { name: /lagre radansvar/i }))
+    await user.click(within(dialog).getByRole('button', { name: /lukk/i }))
+
+    expect(
+      screen.queryByRole('button', { name: /åpne detaljer for camillas timer/i }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^angre$/i }))
+
+    expect(
+      screen.getByRole('button', { name: /åpne detaljer for camillas timer/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('moves an unscheduled card through the detail sheet and returns it with undo', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const tasksPanel = screen.getByRole('heading', { name: 'Uplanlagt' }).closest('section')
+
+    expect(tasksPanel).not.toBeNull()
+
+    await user.click(within(tasksPanel as HTMLElement).getByLabelText(/kort samfunnsfag 8c/i))
+
+    const dialog = screen.getByRole('dialog')
+    await user.selectOptions(within(dialog).getByLabelText('Rad'), 'row-3')
+    await user.selectOptions(within(dialog).getByLabelText('Tid'), '08:30')
+    await user.click(within(dialog).getByRole('button', { name: /lagre plassering/i }))
+    await user.click(within(dialog).getByRole('button', { name: /lukk/i }))
+
+    expect(
+      within(tasksPanel as HTMLElement).queryByLabelText(/kort samfunnsfag 8c/i),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /^angre$/i }))
+
+    expect(
+      within(tasksPanel as HTMLElement).getByLabelText(/kort samfunnsfag 8c/i),
+    ).toBeInTheDocument()
   })
 })

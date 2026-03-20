@@ -11,7 +11,7 @@ import {
   plannerReceiveSpring,
   type DragVector,
 } from '../motion/plannerMotion.ts'
-import { useSchedule } from '../schedule/useSchedule.ts'
+import { useScheduleState } from '../schedule/useSchedule.ts'
 import { AssigneeBadge } from './AssigneeBadge.tsx'
 import { NeedCardVisual } from './NeedCardVisual.tsx'
 
@@ -31,7 +31,7 @@ type DragOverlayCardProps =
 
 export function DragOverlayCard({ card, substitute, dragVector, size }: DragOverlayCardProps) {
   const reduceMotion = useReducedMotion() ?? false
-  const { state } = useSchedule()
+  const state = useScheduleState((plannerState) => plannerState)
   const [isLifted, setIsLifted] = useState(() => reduceMotion)
 
   useEffect(() => {
