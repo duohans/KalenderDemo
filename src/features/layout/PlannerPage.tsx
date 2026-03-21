@@ -250,7 +250,7 @@ export function PlannerPage() {
           pushMotionEvent,
         }}
       >
-        <main className="planner-shell min-h-screen px-2 py-1.5 md:px-3 md:py-2 xl:px-3 xl:py-2.5">
+        <main className="planner-shell min-h-screen px-1 py-1 md:px-1.5 md:py-1.5 xl:px-2 xl:py-2">
           <header className="planner-shell__hero">
             <div className="planner-shell__stats" aria-label="Planstatus">
               <span className="planner-chip">

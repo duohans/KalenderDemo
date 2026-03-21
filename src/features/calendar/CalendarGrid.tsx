@@ -23,7 +23,7 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="planner-stage order-2 flex min-h-[43.5rem] flex-col gap-2.5"
+      className="planner-stage order-2 flex min-h-0 flex-1 flex-col gap-2.5"
     >
       <div className="planner-grid-frame relative flex min-h-0 flex-1 flex-col">
         <div className="planner-stage__header">
@@ -39,7 +39,7 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
             </span>
           </div>
         </div>
-        <div className="planner-grid-scroll flex-1 p-2 md:p-3">
+        <div className="planner-grid-scroll flex-1">
           <div className="calendar-board w-full">
             <div className="calendar-header-grid">
               <div className="calendar-header-spacer">

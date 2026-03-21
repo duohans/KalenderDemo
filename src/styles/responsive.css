@@ -6,14 +6,29 @@
     justify-content: space-between;
   }
 
+  .planner-shell__stats {
+    flex: 1 1 auto;
+  }
+
   .planner-shell__actions {
+    flex: 0 0 auto;
     justify-content: flex-end;
   }
 }
 
 @media (min-width: 1280px) {
   .planner-shell__grid {
-    grid-template-columns: var(--planner-side-width) minmax(0, 1fr) var(--planner-side-width);
+    grid-template-columns: minmax(12rem, var(--planner-side-width)) minmax(0, 1fr) minmax(12rem, var(--planner-side-width));
+    min-height: 0;
+  }
+
+  .planner-stage {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .planner-sidebar {
+    min-height: 0;
   }
 }
 
