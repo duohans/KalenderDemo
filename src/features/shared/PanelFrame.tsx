@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { CircleHelp } from 'lucide-react'
-import type { PropsWithChildren, ReactNode } from 'react'
+import type { PropsWithChildren } from 'react'
 
 import { cx } from '../../lib/cx.ts'
 
@@ -8,10 +8,8 @@ type PanelFrameProps = PropsWithChildren<{
   title: string
   subtitle?: string
   tooltip?: string
-  kicker?: string | null
-  tone?: 'neutral' | 'muted' | 'primary' | 'secondary'
-  headerStyle?: 'solid' | 'split'
-  meta?: ReactNode
+  ariaLabel?: string
+  showHeader?: boolean
   className?: string
 }>
 
@@ -19,10 +17,8 @@ export function PanelFrame({
   title,
   subtitle,
   tooltip,
-  kicker = null,
-  tone = 'neutral',
-  headerStyle = 'split',
-  meta,
+  ariaLabel,
+  showHeader = true,
   className,
   children,
 }: PanelFrameProps) {
@@ -32,38 +28,35 @@ export function PanelFrame({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
       className={cx(
-        'planner-panel flex h-full min-h-[0] flex-col',
-        `planner-panel--${tone}`,
-        `planner-panel--${headerStyle}`,
+        'planner-panel flex h-full min-h-0 flex-col',
+        !showHeader && 'planner-panel--headerless',
         className,
       )}
+      aria-label={ariaLabel ?? title}
     >
-      <header className="planner-panel__header">
-        {kicker ? <p className="panel-kicker">{kicker}</p> : null}
-        <div className="flex items-start justify-between gap-2.5">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="planner-heading text-[1.18rem] leading-none">{title}</h2>
-              {tooltip ? (
-                <span
-                  className="panel-info"
-                  title={tooltip}
-                  aria-label={tooltip}
-                  tabIndex={0}
-                >
-                  <CircleHelp size={14} strokeWidth={2.2} />
-                </span>
+      {showHeader ? (
+        <header className="planner-panel__header">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="panel-kicker">{title}</p>
+              <h2 className="planner-heading planner-panel__title">{title}</h2>
+              {subtitle ? (
+                <p className="planner-panel__subtitle">{subtitle}</p>
               ) : null}
             </div>
-            {subtitle ? (
-              <p className="mt-1.5 text-[0.82rem] leading-snug text-[color:var(--foreground-soft)]">
-                {subtitle}
-              </p>
+            {tooltip ? (
+              <span
+                className="panel-info"
+                title={tooltip}
+                aria-label={tooltip}
+                tabIndex={0}
+              >
+                <CircleHelp size={14} strokeWidth={2.2} />
+              </span>
             ) : null}
           </div>
-          {meta ?? <span aria-hidden="true" className="panel-mark" />}
-        </div>
-      </header>
+        </header>
+      ) : null}
       <div className="planner-panel__body">{children}</div>
     </motion.section>
   )

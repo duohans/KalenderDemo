@@ -12,13 +12,28 @@ afterEach(() => {
 })
 
 describe('App', () => {
-  it('renders the v2 planner shell with unscheduled needs, grid, and substitutes', () => {
+  it('renders a compact planner shell with controls and work regions', () => {
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Uplanlagt' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Vikarer' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Vikarplan for i dag' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Dagsplan' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Uplanlagt' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Dagstavle' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Vikarer' })).toBeInTheDocument()
+    expect(screen.getByText('6 udekket')).toBeInTheDocument()
+    expect(screen.getByText('50% dekning')).toBeInTheDocument()
+    expect(screen.getByText('5 vikarer')).toBeInTheDocument()
+    expect(screen.getByText('5 rader')).toBeInTheDocument()
+    expect(screen.queryByText('Substituttavle')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Planlegg dagens vikarer med tydelig dekning og raske overstyringer.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Dra kort mellom rader og tidsslots, eller bruk detaljarket for tastaturvennlige endringer.',
+      ),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Planoversikt')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Uplanlagt' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Vikarer' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })).toBeInTheDocument()
   })
 
@@ -114,11 +129,9 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    const tasksPanel = screen.getByRole('heading', { name: 'Uplanlagt' }).closest('section')
+    const tasksPanel = screen.getByRole('region', { name: 'Uplanlagt' })
 
-    expect(tasksPanel).not.toBeNull()
-
-    await user.click(within(tasksPanel as HTMLElement).getByLabelText(/kort samfunnsfag 8c/i))
+    await user.click(within(tasksPanel).getByLabelText(/kort samfunnsfag 8c/i))
 
     const dialog = screen.getByRole('dialog')
     await user.selectOptions(within(dialog).getByLabelText('Rad'), 'row-3')
@@ -126,14 +139,10 @@ describe('App', () => {
     await user.click(within(dialog).getByRole('button', { name: /lagre plassering/i }))
     await user.click(within(dialog).getByRole('button', { name: /lukk/i }))
 
-    expect(
-      within(tasksPanel as HTMLElement).queryByLabelText(/kort samfunnsfag 8c/i),
-    ).not.toBeInTheDocument()
+    expect(within(tasksPanel).queryByLabelText(/kort samfunnsfag 8c/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^angre$/i }))
 
-    expect(
-      within(tasksPanel as HTMLElement).getByLabelText(/kort samfunnsfag 8c/i),
-    ).toBeInTheDocument()
+    expect(within(tasksPanel).getByLabelText(/kort samfunnsfag 8c/i)).toBeInTheDocument()
   })
 })

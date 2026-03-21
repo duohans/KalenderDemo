@@ -6,9 +6,11 @@ import {
   selectEffectiveAssigneeId,
   selectNeedCardDisplayModel,
   selectNeedCardConflict,
+  selectPlannerSummary,
   selectRowCards,
   selectRowDisplayModel,
   selectRowTitle,
+  selectSubstituteWorkloads,
 } from './selectors.ts'
 
 describe('schedule selectors', () => {
@@ -122,5 +124,53 @@ describe('schedule selectors', () => {
     expect(selectNeedCardDisplayModel(state, 'card-naturfag-7b')).toBe(
       selectNeedCardDisplayModel(state, 'card-naturfag-7b'),
     )
+  })
+
+  it('builds planner summary metrics and orders unassigned items for the shell', () => {
+    const state = createSeedPlannerState()
+    const summary = selectPlannerSummary(state)
+
+    expect(summary).toMatchObject({
+      total: 12,
+      scheduled: 8,
+      unscheduled: 4,
+      coveredCards: 6,
+      coverageRate: 0.5,
+      unassignedCards: 6,
+      explicitOverrides: 3,
+      rowAssignments: 2,
+      substituteCount: 5,
+    })
+
+    expect(summary.unassignedItems.map((item) => item.title)).toEqual([
+      'Matematikk 6A',
+      'Musikk 8C',
+      'KRLE 9A',
+      'Kroppsøving 4B',
+      'Mat og helse 6C',
+      'Samfunnsfag 8C',
+    ])
+  })
+
+  it('summarizes substitute workloads by effective coverage first', () => {
+    const state = createSeedPlannerState()
+    const workloads = selectSubstituteWorkloads(state)
+
+    expect(workloads[0]).toMatchObject({
+      substitute: {
+        id: 'sub-ida',
+      },
+      effectiveCoverageCount: 2,
+      rowAssignments: 1,
+      explicitOverrides: 0,
+    })
+
+    expect(workloads.map((workload) => workload.substitute.id)).toEqual([
+      'sub-ida',
+      'sub-emma',
+      'sub-kasper',
+      'sub-sara',
+      'sub-tarik',
+    ])
   })
 })

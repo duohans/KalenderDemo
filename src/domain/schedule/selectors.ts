@@ -1,4 +1,4 @@
-import { TIME_BLOCK_ORDER } from './constants.ts'
+import { TIME_BLOCK_ORDER, TIME_BLOCKS } from './constants.ts'
 import type {
   AssignmentMode,
   NeedCard,
@@ -40,7 +40,55 @@ export type NeedCardDisplayModel = {
   statusLabel: string
 }
 
+export type PlannerSummaryItem = {
+  id: string
+  title: string
+  timeLabel: string
+  rowTitle: string
+  sourceTeacherName: string
+}
+
+export type PlannerSummaryViewModel = {
+  total: number
+  scheduled: number
+  unscheduled: number
+  explicitlyAssigned: number
+  inherited: number
+  coveredCards: number
+  coverageRate: number
+  unassignedCards: number
+  explicitOverrides: number
+  rowAssignments: number
+  substituteCount: number
+  unassignedItems: PlannerSummaryItem[]
+}
+
+export type SubstituteWorkload = {
+  substitute: Substitute
+  rowAssignments: number
+  explicitOverrides: number
+  effectiveCoverageCount: number
+}
+
 const NEUTRAL_ACCENT = '#d1d5db'
+const UNSCHEDULED_ROW_TITLE = 'Uplanlagt'
+const UNKNOWN_ROW_TITLE = 'Ukjent rad'
+const UNKNOWN_TEACHER_NAME = 'Ukjent lærer'
+const NO_TIME_LABEL = 'Uten tidspunkt'
+const TIME_BLOCK_LABELS = TIME_BLOCKS.reduce<Record<TimeBlockId, string>>(
+  (accumulator, block) => {
+    accumulator[block.id] = block.label
+    return accumulator
+  },
+  {
+    '08:30': '08:30-09:30',
+    '09:30': '09:30-10:30',
+    '10:30': '10:30-11:30',
+    '11:30': '11:30-12:30',
+    '12:30': '12:30-13:30',
+    '13:30': '13:30-14:30',
+  },
+)
 
 type ScheduledIndex = {
   cards: ScheduledNeedCard[]
@@ -58,6 +106,8 @@ const needCardDisplayModelCache = new WeakMap<
   PlannerState,
   Map<string, NeedCardDisplayModel | null>
 >()
+const plannerSummaryCache = new WeakMap<PlannerState, PlannerSummaryViewModel>()
+const substituteWorkloadCache = new WeakMap<PlannerState, SubstituteWorkload[]>()
 
 function isScheduledNeedCard(card: NeedCard): card is ScheduledNeedCard {
   return (
@@ -108,6 +158,10 @@ function splitNeedCardTitle(title: string) {
     subjectLabel: match[1].trim(),
     classLabel: match[2].toUpperCase(),
   }
+}
+
+function getTimeBlockLabel(timeBlockId: TimeBlockId | null) {
+  return timeBlockId ? TIME_BLOCK_LABELS[timeBlockId] : NO_TIME_LABEL
 }
 
 function getStateScopedMap<T>(cache: WeakMap<PlannerState, Map<string, T>>, state: PlannerState) {
@@ -467,7 +521,13 @@ export function selectRow(state: PlannerState, rowId: string): Row | null {
   return state.rows[rowId] ?? null
 }
 
-export function selectPlannerSummary(state: PlannerState) {
+export function selectPlannerSummary(state: PlannerState): PlannerSummaryViewModel {
+  const cached = plannerSummaryCache.get(state)
+
+  if (cached) {
+    return cached
+  }
+
   const total = state.needCardOrder.length
   const scheduled = selectScheduledNeedCards(state).length
   const explicitlyAssigned = state.needCardOrder.filter(
@@ -476,12 +536,109 @@ export function selectPlannerSummary(state: PlannerState) {
   const inherited = state.needCardOrder.filter(
     (cardId) => selectNeedCardAssignmentMode(state, cardId) === 'inherited',
   ).length
+  const rowAssignments = state.rowOrder.filter(
+    (rowId) => state.rows[rowId]?.rowResponsibleId !== null,
+  ).length
+  const coveredCards = state.needCardOrder.filter(
+    (cardId) => selectEffectiveAssigneeId(state, cardId) !== null,
+  ).length
+  const unassignedItems = state.needCardOrder
+    .map((cardId) => {
+      const card = state.needCards[cardId]
 
-  return {
+      if (!card || selectEffectiveAssigneeId(state, cardId) !== null) {
+        return null
+      }
+
+      const teacher = selectTeacherById(state, card.sourceTeacherId)
+      const rowTitle =
+        card.placement === 'scheduled' && card.rowId
+          ? selectRowTitle(state, card.rowId).compact || UNKNOWN_ROW_TITLE
+          : UNSCHEDULED_ROW_TITLE
+
+      return {
+        item: {
+          id: card.id,
+          title: card.title,
+          timeLabel: getTimeBlockLabel(card.timeBlockId),
+          rowTitle,
+          sourceTeacherName: teacher?.name ?? UNKNOWN_TEACHER_NAME,
+        },
+        sortOrder: card.timeBlockId ? TIME_BLOCK_ORDER[card.timeBlockId] : Number.MAX_SAFE_INTEGER,
+      }
+    })
+    .filter((entry): entry is { item: PlannerSummaryItem; sortOrder: number } => entry !== null)
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder
+      }
+
+      const rowCompare = left.item.rowTitle.localeCompare(right.item.rowTitle, 'nb')
+
+      if (rowCompare !== 0) {
+        return rowCompare
+      }
+
+      return left.item.title.localeCompare(right.item.title, 'nb')
+    })
+    .map((entry) => entry.item)
+  const unassignedCards = unassignedItems.length
+
+  const nextSummary = {
     total,
     scheduled,
     unscheduled: total - scheduled,
     explicitlyAssigned,
     inherited,
+    coveredCards,
+    coverageRate: total === 0 ? 0 : coveredCards / total,
+    unassignedCards,
+    explicitOverrides: explicitlyAssigned,
+    rowAssignments,
+    substituteCount: state.substituteOrder.length,
+    unassignedItems,
   }
+
+  plannerSummaryCache.set(state, nextSummary)
+  return nextSummary
+}
+
+export function selectSubstituteWorkloads(state: PlannerState): SubstituteWorkload[] {
+  const cached = substituteWorkloadCache.get(state)
+
+  if (cached) {
+    return cached
+  }
+
+  const workloads = state.substituteOrder
+    .map((substituteId) => {
+      const substitute = state.substitutes[substituteId]
+      const rowAssignments = state.rowOrder.filter(
+        (rowId) => state.rows[rowId]?.rowResponsibleId === substituteId,
+      ).length
+      const explicitOverrides = state.needCardOrder.filter(
+        (cardId) => state.needCards[cardId]?.explicitAssigneeId === substituteId,
+      ).length
+      const effectiveCoverageCount = state.needCardOrder.filter(
+        (cardId) => selectEffectiveAssigneeId(state, cardId) === substituteId,
+      ).length
+
+      return {
+        substitute,
+        rowAssignments,
+        explicitOverrides,
+        effectiveCoverageCount,
+      }
+    })
+    .filter((workload): workload is SubstituteWorkload => Boolean(workload.substitute))
+    .sort((left, right) => {
+      if (right.effectiveCoverageCount !== left.effectiveCoverageCount) {
+        return right.effectiveCoverageCount - left.effectiveCoverageCount
+      }
+
+      return left.substitute.name.localeCompare(right.substitute.name, 'nb')
+    })
+
+  substituteWorkloadCache.set(state, workloads)
+  return workloads
 }

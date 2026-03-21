@@ -1,5 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
+test.use({
+  viewport: {
+    width: 1600,
+    height: 1200,
+  },
+})
+
 async function dragTo(page: Page, source: Locator, target: Locator) {
   const sourceBox = await source.boundingBox()
   const targetBox = await target.boundingBox()
@@ -14,9 +21,25 @@ async function dragTo(page: Page, source: Locator, target: Locator) {
   )
   await page.mouse.down()
   await page.mouse.move(
+    sourceBox.x + sourceBox.width / 2 + 8,
+    sourceBox.y + sourceBox.height / 2 + 8,
+    { steps: 4 },
+  )
+  await page.mouse.move(
     targetBox.x + targetBox.width / 2,
     targetBox.y + targetBox.height / 2,
-    { steps: 18 },
+    { steps: 20 },
+  )
+  const settledTargetBox = await target.boundingBox()
+
+  if (!settledTargetBox) {
+    throw new Error('Missing refreshed target box for drag operation.')
+  }
+
+  await page.mouse.move(
+    settledTargetBox.x + settledTargetBox.width / 2,
+    settledTargetBox.y + settledTargetBox.height / 2,
+    { steps: 6 },
   )
   await page.mouse.up()
 }
@@ -24,9 +47,7 @@ async function dragTo(page: Page, source: Locator, target: Locator) {
 test('drags an unscheduled card into the grid', async ({ page }) => {
   await page.goto('/')
 
-  const tasksPanel = page.locator('section').filter({
-    has: page.getByRole('heading', { name: 'Uplanlagt' }),
-  })
+  const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
   const card = tasksPanel.getByLabel(/kort samfunnsfag 8c/i)
   const targetCell = page.getByTestId('calendar-cell-row-3-08:30')
 
@@ -39,9 +60,7 @@ test('drags an unscheduled card into the grid', async ({ page }) => {
 test('moves a card through the detail sheet and persists on reload', async ({ page }) => {
   await page.goto('/')
 
-  const tasksPanel = page.locator('section').filter({
-    has: page.getByRole('heading', { name: 'Uplanlagt' }),
-  })
+  const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
 
   await tasksPanel.getByLabel(/kort samfunnsfag 8c/i).click()
 
@@ -56,19 +75,14 @@ test('moves a card through the detail sheet and persists on reload', async ({ pa
   await page.reload()
 
   await expect(
-    page
-      .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Uplanlagt' }) })
-      .getByLabel(/kort samfunnsfag 8c/i),
+    page.getByRole('region', { name: 'Uplanlagt' }).getByLabel(/kort samfunnsfag 8c/i),
   ).toHaveCount(0)
 })
 
 test('moves a card through the detail sheet and supports undo in-session', async ({ page }) => {
   await page.goto('/')
 
-  const tasksPanel = page.locator('section').filter({
-    has: page.getByRole('heading', { name: 'Uplanlagt' }),
-  })
+  const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
 
   await tasksPanel.getByLabel(/kort samfunnsfag 8c/i).click()
 
@@ -83,9 +97,6 @@ test('moves a card through the detail sheet and supports undo in-session', async
   await page.getByRole('button', { name: /^angre$/i }).click()
 
   await expect(
-    page
-      .locator('section')
-      .filter({ has: page.getByRole('heading', { name: 'Uplanlagt' }) })
-      .getByLabel(/kort samfunnsfag 8c/i),
+    page.getByRole('region', { name: 'Uplanlagt' }).getByLabel(/kort samfunnsfag 8c/i),
   ).toBeVisible()
 })

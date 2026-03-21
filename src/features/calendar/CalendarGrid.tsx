@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { CalendarDays, Layers3 } from 'lucide-react'
 
 import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
 import { selectCellNeedCardIdMap } from '../../domain/schedule/selectors.ts'
@@ -9,24 +10,41 @@ import { TimeHeader } from './TimeHeader.tsx'
 
 type CalendarGridProps = {
   activeDrag: PlannerDragItem | null
+  dayLabel: string
 }
 
-export function CalendarGrid({ activeDrag }: CalendarGridProps) {
+export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
   const rowOrder = useScheduleState((state) => state.rowOrder)
   const cellNeedCardMap = useScheduleState((state) => selectCellNeedCardIdMap(state))
 
   return (
     <motion.section
+      aria-label="Dagstavle"
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="planner-stage order-1 flex min-h-[43.5rem] flex-col gap-2.5 xl:order-2"
+      className="planner-stage order-2 flex min-h-[43.5rem] flex-col gap-2.5"
     >
       <div className="planner-grid-frame relative flex min-h-0 flex-1 flex-col">
+        <div className="planner-stage__header">
+          <h2 className="sr-only">Dagstavle</h2>
+          <div className="planner-stage__chips">
+            <span className="planner-chip planner-chip--board">
+              <CalendarDays size={15} strokeWidth={2.1} aria-hidden="true" />
+              {dayLabel}
+            </span>
+            <span className="planner-chip planner-chip--board">
+              <Layers3 size={15} strokeWidth={2.1} aria-hidden="true" />
+              {rowOrder.length} rader
+            </span>
+          </div>
+        </div>
         <div className="planner-grid-scroll flex-1 p-2 md:p-3">
           <div className="calendar-board w-full">
             <div className="calendar-header-grid">
-              <div aria-hidden="true" className="calendar-header-spacer" />
+              <div className="calendar-header-spacer">
+                <p className="calendar-header-spacer__title">Ansvar</p>
+              </div>
               {TIME_BLOCKS.map((block) => (
                 <TimeHeader key={block.id} block={block} />
               ))}

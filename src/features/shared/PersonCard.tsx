@@ -5,7 +5,7 @@ import { GripVertical, UserPlus } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
-import type { Substitute } from '../../domain/schedule/types.ts'
+import type { SubstituteWorkload } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
@@ -17,7 +17,7 @@ import {
 } from '../motion/plannerMotion.ts'
 
 type PersonCardProps = {
-  person: Substitute
+  workload: SubstituteWorkload
   activeDrag: PlannerDragItem | null
 }
 
@@ -30,20 +30,21 @@ function formatToolName(name: string) {
   return lastName ? `${firstName} ${lastName[0]}.` : firstName
 }
 
-export function PersonCard({ person, activeDrag }: PersonCardProps) {
+export function PersonCard({ workload, activeDrag }: PersonCardProps) {
   const reduceMotion = useReducedMotion() ?? false
   const { rejectedDrag } = usePlannerDragFeedback()
+  const { effectiveCoverageCount, explicitOverrides, rowAssignments, substitute } = workload
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `substitute:${person.id}`,
+    id: `substitute:${substitute.id}`,
     data: {
       type: 'substitute',
-      substituteId: person.id,
+      substituteId: substitute.id,
       from: { type: 'substitute-pool' },
     },
   })
   const isRejected =
     rejectedDrag?.item.type === 'substitute' &&
-    rejectedDrag.item.substituteId === person.id
+    rejectedDrag.item.substituteId === substitute.id
 
   return (
     <div
@@ -76,22 +77,30 @@ export function PersonCard({ person, activeDrag }: PersonCardProps) {
           'substitute-card',
           isDragging && 'opacity-0',
           activeDrag?.type === 'substitute' &&
-            activeDrag.substituteId === person.id &&
+            activeDrag.substituteId === substitute.id &&
             'substitute-card--active',
         )}
         style={
           {
-            ['--badge-accent' as string]: person.accentColor,
+            ['--badge-accent' as string]: substitute.accentColor,
           } as CSSProperties
         }
-        aria-label={`Vikar ${person.name}`}
+        aria-label={`Vikar ${substitute.name}`}
         {...listeners}
         {...attributes}
       >
-        <span className="substitute-card__avatar">{person.avatarInitials}</span>
+        <span className="substitute-card__avatar">{substitute.avatarInitials}</span>
         <span className="min-w-0 flex-1 text-left">
-          <span className="substitute-card__name block truncate text-[1rem] leading-none">
-            {formatToolName(person.name)}
+          <span className="substitute-card__headline">
+            <span className="substitute-card__name block truncate text-[1rem] leading-none">
+              {formatToolName(substitute.name)}
+            </span>
+            <span className="substitute-card__count" aria-hidden="true">
+              {effectiveCoverageCount}
+            </span>
+          </span>
+          <span className="substitute-card__details">
+            {rowAssignments} rader • {explicitOverrides} overstyringer
           </span>
         </span>
         <span className="substitute-card__meta" aria-hidden="true">

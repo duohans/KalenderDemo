@@ -8,9 +8,9 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { Redo2, Undo2 } from 'lucide-react'
+import { CheckCheck, Redo2, ShieldAlert, Undo2, Users2 } from 'lucide-react'
 import { useReducedMotion } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   getPlannerDragItem,
@@ -19,6 +19,7 @@ import {
   resolveDrop,
   type PlannerDragItem,
 } from '../../domain/schedule/dnd.ts'
+import { selectPlannerSummary } from '../../domain/schedule/selectors.ts'
 import type { PlannerAction } from '../../domain/schedule/types.ts'
 import {
   actionToDropHandoff,
@@ -115,6 +116,17 @@ export function PlannerPage() {
   } = useDragFeedbackTimers({ reduceMotion })
   const shortcutModifier =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'
+  const plannerSummary = selectPlannerSummary(state)
+  const coveragePercent = Math.round(plannerSummary.coverageRate * 100)
+  const dayLabel = useMemo(() => {
+    const formatted = new Intl.DateTimeFormat('nb-NO', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }).format(new Date())
+
+    return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -238,14 +250,21 @@ export function PlannerPage() {
           pushMotionEvent,
         }}
       >
-        <main className="planner-shell min-h-screen px-2 py-2.5 md:px-3 md:py-3.5 xl:px-3 xl:py-4">
-          <div className="planner-shell__meta">
-            <div>
-              <p className="panel-kicker">Substituttavle</p>
-              <h1 className="planner-shell__title planner-heading">Dagsplan</h1>
-              <p className="planner-shell__copy">
-                Dra kort mellom rader og tidsslots, eller bruk detaljarket for tastaturvennlige endringer.
-              </p>
+        <main className="planner-shell min-h-screen px-2 py-1.5 md:px-3 md:py-2 xl:px-3 xl:py-2.5">
+          <header className="planner-shell__hero">
+            <div className="planner-shell__stats" aria-label="Planstatus">
+              <span className="planner-chip">
+                <ShieldAlert size={15} strokeWidth={2.1} aria-hidden="true" />
+                {plannerSummary.unassignedCards} udekket
+              </span>
+              <span className="planner-chip">
+                <CheckCheck size={15} strokeWidth={2.1} aria-hidden="true" />
+                {coveragePercent}% dekning
+              </span>
+              <span className="planner-chip">
+                <Users2 size={15} strokeWidth={2.1} aria-hidden="true" />
+                {plannerSummary.substituteCount} vikarer
+              </span>
             </div>
             <div className="planner-shell__actions">
               <button
@@ -278,11 +297,11 @@ export function PlannerPage() {
                 <kbd>Z</kbd>
               </div>
             </div>
-          </div>
+          </header>
 
-          <div className="mx-auto grid w-full max-w-[126rem] gap-2.5 xl:grid-cols-[15.5rem_minmax(0,1fr)_15.5rem]">
+          <div className="planner-shell__grid">
             <TasksPanel activeDrag={activeDrag} />
-            <CalendarGrid activeDrag={activeDrag} />
+            <CalendarGrid activeDrag={activeDrag} dayLabel={dayLabel} />
             <PeoplePanel activeDrag={activeDrag} />
           </div>
 

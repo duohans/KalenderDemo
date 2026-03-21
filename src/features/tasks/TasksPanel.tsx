@@ -28,7 +28,6 @@ export function TasksPanel({ activeDrag }: TasksPanelProps) {
   const { recentEvent } = usePlannerDragFeedback()
   const cardIds = selectUnscheduledNeedCardIds(state)
   const isEmpty = cardIds.length === 0
-  const useCompactDensity = cardIds.length > 5
   const { isOver, setNodeRef } = useDroppable({
     id: 'unscheduled-panel',
     data: {
@@ -40,11 +39,9 @@ export function TasksPanel({ activeDrag }: TasksPanelProps) {
   return (
     <PanelFrame
       title="Uplanlagt"
-      tooltip="Kort som venter på å bli lagt inn i planen."
-      meta={<span className="panel-count">{cardIds.length}</span>}
-      tone="neutral"
-      headerStyle="split"
-      className="order-2 xl:order-1"
+      ariaLabel="Uplanlagt"
+      showHeader={false}
+      className="planner-sidebar planner-sidebar--tasks order-1"
     >
       <motion.div
         ref={setNodeRef}
@@ -68,12 +65,7 @@ export function TasksPanel({ activeDrag }: TasksPanelProps) {
         )}
         title="Dra et kort hit for å sende det tilbake til verktøyfeltet"
       >
-        <div
-          className={cx(
-            'panel-scroll flex flex-col gap-2',
-            useCompactDensity && 'panel-scroll--compact',
-          )}
-        >
+        <div className="panel-scroll flex flex-col gap-2.5">
           {!isEmpty ? (
             cardIds.map((cardId) => (
               <TaskCard

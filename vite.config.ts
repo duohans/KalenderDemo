@@ -9,6 +9,12 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     css: true,
-    exclude: [...configDefaults.exclude, 'e2e/**', 'playwright.config.ts', '.claude/**'],
+    exclude: [
+      ...configDefaults.exclude,
+      'e2e/**',
+      'playwright.config.ts',
+      '.claude/**',
+      'subplanner-v2/**',
+    ],
   },
 })

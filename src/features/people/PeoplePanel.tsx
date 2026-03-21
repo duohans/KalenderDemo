@@ -1,4 +1,5 @@
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
+import { selectSubstituteWorkloads } from '../../domain/schedule/selectors.ts'
 import { useScheduleState } from '../schedule/useSchedule.ts'
 import { PanelFrame } from '../shared/PanelFrame.tsx'
 import { PersonCard } from '../shared/PersonCard.tsx'
@@ -8,31 +9,20 @@ type PeoplePanelProps = {
 }
 
 export function PeoplePanel({ activeDrag }: PeoplePanelProps) {
-  const substituteOrder = useScheduleState((state) => state.substituteOrder)
-  const substitutes = useScheduleState((state) => state.substitutes)
-  const useCompactDensity = substituteOrder.length > 5
+  const substituteWorkloads = useScheduleState(selectSubstituteWorkloads)
 
   return (
     <PanelFrame
       title="Vikarer"
-      tooltip="Rad = standardansvar. Kort = overstyring."
-      meta={<span className="panel-count">{substituteOrder.length}</span>}
-      tone="neutral"
-      headerStyle="split"
-      className="order-3"
+      ariaLabel="Vikarer"
+      showHeader={false}
+      className="planner-sidebar planner-sidebar--people order-3"
     >
-      <div
-        className={[
-          'panel-scroll flex flex-col gap-2',
-          useCompactDensity ? 'panel-scroll--compact' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-      >
-        {substituteOrder.map((substituteId) => (
+      <div className="panel-scroll flex flex-col gap-2.5">
+        {substituteWorkloads.map((workload) => (
           <PersonCard
-            key={substituteId}
-            person={substitutes[substituteId]}
+            key={workload.substitute.id}
+            workload={workload}
             activeDrag={activeDrag}
           />
         ))}
