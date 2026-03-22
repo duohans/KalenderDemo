@@ -1,18 +1,10 @@
 import { useDroppable } from '@dnd-kit/core'
-import { motion, useReducedMotion } from 'framer-motion'
 import type { CSSProperties } from 'react'
 
 import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
 import type { TimeBlockId } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
-import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
-import {
-  getReceiveAnimation,
-  getTargetActivationAnimation,
-  plannerPulseTransition,
-  plannerTargetSpring,
-} from '../motion/plannerMotion.ts'
 import {
   useScheduleState,
 } from '../schedule/useSchedule.ts'
@@ -33,8 +25,6 @@ export function CalendarCell({
   activeDrag,
 }: CalendarCellProps) {
   const state = useScheduleState((plannerState) => plannerState)
-  const reduceMotion = useReducedMotion() ?? false
-  const { recentEvent } = usePlannerDragFeedback()
   const rowDisplayModel = selectRowDisplayModel(state, rowId)
   const { isOver, setNodeRef } = useDroppable({
     id: `calendar-cell:${rowId}:${timeBlockId}`,
@@ -54,30 +44,11 @@ export function CalendarCell({
       timeBlockId,
     })
   const card = cardId ? state.needCards[cardId] : null
-  const isReceivingCard =
-    recentEvent?.type === 'moveNeedCardToCell' &&
-    recentEvent.rowId === rowId &&
-    recentEvent.timeBlockId === timeBlockId
 
   return (
-    <motion.div
+    <div
       ref={setNodeRef}
       data-testid={`calendar-cell-${rowId}-${timeBlockId}`}
-      layout
-      animate={
-        isReceivingCard
-          ? getReceiveAnimation('card', true, reduceMotion)
-          : getTargetActivationAnimation(
-              'cell',
-              {
-                ready: Boolean(isNeedCardDragActive && canAcceptNeedCard),
-                active: Boolean(isNeedCardDragActive && isOver && canAcceptNeedCard),
-                invalid: Boolean(isNeedCardDragActive && isOver && !canAcceptNeedCard),
-              },
-              reduceMotion,
-            )
-      }
-      transition={isReceivingCard ? plannerPulseTransition : plannerTargetSpring}
       style={{ ['--row-accent' as string]: rowDisplayModel?.rowAccent ?? '#d1d5db' } as CSSProperties}
       className={cx(
         'calendar-cell',
@@ -94,6 +65,6 @@ export function CalendarCell({
           canAcceptNeedCard={Boolean(canAcceptNeedCard)}
         />
       )}
-    </motion.div>
+    </div>
   )
 }

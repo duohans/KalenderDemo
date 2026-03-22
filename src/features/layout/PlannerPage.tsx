@@ -5,11 +5,9 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { CheckCheck, Redo2, ShieldAlert, Undo2, Users2 } from 'lucide-react'
-import { useReducedMotion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
@@ -22,15 +20,11 @@ import {
 import { selectPlannerSummary } from '../../domain/schedule/selectors.ts'
 import type { PlannerAction } from '../../domain/schedule/types.ts'
 import {
-  actionToDropHandoff,
   PlannerDragFeedbackProvider,
   type PlannerMotionEvent,
   type RejectedDrag,
 } from '../motion/PlannerDragFeedbackContext.tsx'
 import { useDragFeedbackTimers } from '../motion/useDragFeedbackTimers.ts'
-import {
-  getPlannerDropAnimation,
-} from '../motion/plannerMotion.ts'
 import {
   useSchedule,
   useScheduleHistoryActions,
@@ -95,25 +89,19 @@ export function PlannerPage() {
   const { closeSelection } = useScheduleSelectionActions()
   const { canRedo, canUndo, redo, undo } = useScheduleHistoryActions()
   const [activeDrag, setActiveDrag] = useState<PlannerDragItem | null>(null)
-  const [dragVector, setDragVector] = useState({ x: 0, y: 0 })
   const [overlaySize, setOverlaySize] = useState<{ width: number; height: number } | null>(null)
-  const [dropAnimationKind, setDropAnimationKind] = useState<'valid' | 'invalid'>('valid')
   const [manualAnnouncement, setManualAnnouncement] = useState('')
-  const reduceMotion = useReducedMotion() ?? false
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
     }),
   )
   const {
-    clearDropHandoff,
-    dropHandoff,
-    pushDropHandoff,
     pushMotionEvent,
     pushRejectedDrag,
     recentEvent,
     rejectedDrag,
-  } = useDragFeedbackTimers({ reduceMotion })
+  } = useDragFeedbackTimers()
   const shortcutModifier =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'
   const plannerSummary = selectPlannerSummary(state)
@@ -175,16 +163,9 @@ export function PlannerPage() {
 
     closeSelection()
     setActiveDrag(getPlannerDragItem(event.active))
-    setDragVector({ x: 0, y: 0 })
     setOverlaySize(
       initialRect ? { width: initialRect.width, height: initialRect.height } : null,
     )
-    setDropAnimationKind('valid')
-    clearDropHandoff()
-  }
-
-  const handleDragMove = (event: DragMoveEvent) => {
-    setDragVector(event.delta)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -196,22 +177,12 @@ export function PlannerPage() {
     )
 
     if (action) {
-      setDropAnimationKind('valid')
-      const dropHandoffEvent = actionToDropHandoff(action)
-
-      if (dropHandoffEvent) {
-        pushDropHandoff(dropHandoffEvent)
-      }
-
       handleAction(action)
     } else if (dragItem) {
-      setDropAnimationKind('invalid')
-      clearDropHandoff()
       pushRejectedDrag(dragItem)
     }
 
     setActiveDrag(null)
-    setDragVector({ x: 0, y: 0 })
   }
 
   const overlayCard =
@@ -228,25 +199,17 @@ export function PlannerPage() {
       sensors={sensors}
       collisionDetection={plannerCollisionDetection}
       onDragStart={handleDragStart}
-      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onDragCancel={() => {
         if (activeDrag) {
-          setDropAnimationKind('invalid')
-          clearDropHandoff()
           pushRejectedDrag(activeDrag)
         }
 
         setActiveDrag(null)
-        setDragVector({ x: 0, y: 0 })
       }}
     >
       <PlannerDragFeedbackProvider
         value={{
-          dragVector,
-          dropHandoff,
-          recentEvent,
-          rejectedDrag,
           pushMotionEvent,
         }}
       >
@@ -314,19 +277,17 @@ export function PlannerPage() {
         <DragOverlay
           adjustScale={false}
           zIndex={60}
-          dropAnimation={getPlannerDropAnimation(dropAnimationKind, reduceMotion)}
+          dropAnimation={null}
         >
           {overlayCard ? (
             <DragOverlayCard
               card={overlayCard}
-              dragVector={dragVector}
               size={overlaySize}
             />
           ) : null}
           {overlaySubstitute ? (
             <DragOverlayCard
               substitute={overlaySubstitute}
-              dragVector={dragVector}
               size={overlaySize}
             />
           ) : null}

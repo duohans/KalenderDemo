@@ -1,10 +1,5 @@
-import { motion, useReducedMotion } from 'framer-motion'
 import { CircleDashed, Plus, X } from 'lucide-react'
 import { cx } from '../../lib/cx.ts'
-import {
-  getTargetActivationAnimation,
-  plannerTargetSpring,
-} from '../motion/plannerMotion.ts'
 
 type EmptyCellStateProps = {
   isNeedCardDragActive: boolean
@@ -15,25 +10,13 @@ export function EmptyCellState({
   isNeedCardDragActive,
   canAcceptNeedCard,
 }: EmptyCellStateProps) {
-  const reduceMotion = useReducedMotion() ?? false
   const isReady = isNeedCardDragActive && canAcceptNeedCard
   const isBlocked = isNeedCardDragActive && !canAcceptNeedCard
   const Icon = isNeedCardDragActive ? (canAcceptNeedCard ? Plus : X) : CircleDashed
   const label = isNeedCardDragActive ? (canAcceptNeedCard ? 'Slipp her' : 'Opptatt') : 'Tom celle'
 
   return (
-    <motion.div
-      initial={false}
-      animate={getTargetActivationAnimation(
-        'cell',
-        {
-          ready: isNeedCardDragActive,
-          active: isReady,
-          invalid: isBlocked,
-        },
-        reduceMotion,
-      )}
-      transition={plannerTargetSpring}
+    <div
       className={cx(
         'empty-cell-state',
         isNeedCardDragActive && 'empty-cell-state--engaged',
@@ -53,6 +36,6 @@ export function EmptyCellState({
           {label}
         </span>
       ) : null}
-    </motion.div>
+    </div>
   )
 }

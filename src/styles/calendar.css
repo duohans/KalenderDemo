@@ -59,13 +59,6 @@
   background: rgba(255, 255, 255, 0.55);
   padding: 0.45rem;
   overflow: hidden;
-  transition:
-    background-color var(--transition-fast) ease,
-    border-color var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease,
-    transform var(--transition-fast) ease;
-  transform-origin: center;
-  will-change: transform;
 }
 
 .calendar-cell::before {
@@ -119,10 +112,6 @@
   border-radius: 1.15rem;
   background: rgba(248, 243, 234, 0.46);
   color: color-mix(in srgb, var(--foreground-soft) 84%, #ffffff);
-  transition:
-    background-color var(--transition-fast) ease,
-    border-color var(--transition-fast) ease,
-    color var(--transition-fast) ease;
 }
 
 .empty-cell-state--ready {
@@ -146,10 +135,6 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.94);
   opacity: 0;
-  transform: scale(0.84);
-  transition:
-    opacity var(--transition-fast) ease,
-    transform var(--transition-fast) ease;
 }
 
 .empty-cell-state__line {
@@ -164,15 +149,10 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   opacity: 0;
-  transform: translateY(0.2rem);
-  transition:
-    opacity var(--transition-fast) ease,
-    transform var(--transition-fast) ease;
 }
 
 .empty-cell-state--engaged .empty-cell-state__label {
   opacity: 1;
-  transform: translateY(0);
 }
 
 .calendar-cell:hover .empty-cell-state {
@@ -182,7 +162,6 @@
 .calendar-cell:hover .empty-cell-state__glyph,
 .empty-cell-state--engaged .empty-cell-state__glyph {
   opacity: 0.86;
-  transform: scale(1);
 }
 
 .row-header-dropzone {
@@ -193,8 +172,6 @@
   background: color-mix(in srgb, var(--row-accent) 8%, var(--surface-cream));
   overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  transform-origin: center left;
-  will-change: transform;
 }
 
 .row-header-dropzone--owned {
@@ -234,19 +211,12 @@
   background: rgba(255, 255, 255, 0.76);
   color: var(--foreground-soft);
   opacity: 0;
-  transform: scale(0.94);
-  transition:
-    opacity var(--transition-fast) ease,
-    transform var(--transition-fast) ease,
-    border-color var(--transition-fast) ease,
-    color var(--transition-fast) ease;
 }
 
 .row-header-dropzone:hover .row-header__corner-clear,
 .row-header-dropzone:focus-within .row-header__corner-clear,
 .row-header__corner-clear:focus-visible {
   opacity: 1;
-  transform: scale(1);
 }
 
 .row-header__corner-clear:hover,
@@ -279,8 +249,6 @@
 .row-header__avatar-shell {
   display: inline-flex;
   flex: 0 0 auto;
-  transform-origin: center;
-  will-change: transform;
 }
 
 .row-header__avatar,
@@ -378,12 +346,6 @@
   background: rgba(255, 255, 255, 0.76);
   color: color-mix(in srgb, var(--foreground-soft) 86%, #ffffff);
   opacity: 0.46;
-  transition:
-    opacity var(--transition-fast) ease,
-    color var(--transition-fast) ease,
-    border-color var(--transition-fast) ease,
-    background-color var(--transition-fast) ease;
-  will-change: transform;
 }
 
 .row-drop-hint--ready {

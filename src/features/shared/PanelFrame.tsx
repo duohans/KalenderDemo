@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { CircleHelp } from 'lucide-react'
 import type { PropsWithChildren } from 'react'
 
@@ -23,10 +22,7 @@ export function PanelFrame({
   children,
 }: PanelFrameProps) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
+    <section
       className={cx(
         'planner-panel flex h-full min-h-0 flex-col',
         !showHeader && 'planner-panel--headerless',
@@ -58,6 +54,6 @@ export function PanelFrame({
         </header>
       ) : null}
       <div className="planner-panel__body">{children}</div>
-    </motion.section>
+    </section>
   )
 }

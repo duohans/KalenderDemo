@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   ChevronRight,
   Clock3,
@@ -571,71 +570,61 @@ export function PlannerDetailSheet() {
         ? selectRowTitle(state, selection.rowId).compact
         : ''
 
+  if (!selection) {
+    return null
+  }
+
   return (
-    <AnimatePresence>
-      {selection ? (
-        <>
-          <motion.button
-            key="planner-detail-backdrop"
+    <>
+      <button
+        type="button"
+        aria-label="Lukk detaljer"
+        className="planner-detail-backdrop"
+        onClick={closeSelection}
+      />
+      <aside
+        ref={sheetRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="planner-detail-title"
+        className="planner-detail-sheet"
+        tabIndex={-1}
+      >
+        <div className="detail-sheet__topbar">
+          <div>
+            <p className="panel-kicker">Detaljer</p>
+            <h3 id="planner-detail-title" className="planner-heading text-[1.55rem] leading-none">
+              {title}
+            </h3>
+          </div>
+          <button
             type="button"
-            aria-label="Lukk detaljer"
-            className="planner-detail-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="action-button action-button--secondary detail-sheet__close"
             onClick={closeSelection}
-          />
-          <motion.aside
-            key="planner-detail-sheet"
-            ref={sheetRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="planner-detail-title"
-            className="planner-detail-sheet"
-            tabIndex={-1}
-            initial={{ opacity: 0, x: 22, y: 14 }}
-            animate={{ opacity: 1, x: 0, y: 0 }}
-            exit={{ opacity: 0, x: 18, y: 12 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
           >
-            <div className="detail-sheet__topbar">
-              <div>
-                <p className="panel-kicker">Detaljer</p>
-                <h3 id="planner-detail-title" className="planner-heading text-[1.55rem] leading-none">
-                  {title}
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="action-button action-button--secondary detail-sheet__close"
-                onClick={closeSelection}
-              >
-                <X size={14} strokeWidth={2.25} aria-hidden="true" />
-                Lukk
-              </button>
-            </div>
-            <div className="detail-sheet__stack">
-              {selection.kind === 'need-card' ? (
-                <NeedCardDetailContent
-                  key={selection.cardId}
-                  cardId={selection.cardId}
-                  runAction={runAction}
-                  state={state}
-                />
-              ) : (
-                <RowDetailContent
-                  key={selection.rowId}
-                  openSelection={openSelection}
-                  rowId={selection.rowId}
-                  runAction={runAction}
-                  state={state}
-                />
-              )}
-            </div>
-          </motion.aside>
-        </>
-      ) : null}
-    </AnimatePresence>
+            <X size={14} strokeWidth={2.25} aria-hidden="true" />
+            Lukk
+          </button>
+        </div>
+        <div className="detail-sheet__stack">
+          {selection.kind === 'need-card' ? (
+            <NeedCardDetailContent
+              key={selection.cardId}
+              cardId={selection.cardId}
+              runAction={runAction}
+              state={state}
+            />
+          ) : (
+            <RowDetailContent
+              key={selection.rowId}
+              openSelection={openSelection}
+              rowId={selection.rowId}
+              runAction={runAction}
+              state={state}
+            />
+          )}
+        </div>
+      </aside>
+    </>
   )
 }

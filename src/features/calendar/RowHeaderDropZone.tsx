@@ -1,5 +1,4 @@
 import { useDroppable } from '@dnd-kit/core'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { LayoutGrid, UserCheck, UserPlus, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
@@ -7,12 +6,6 @@ import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd
 import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
-import {
-  getTargetActivationAnimation,
-  plannerLayoutSpring,
-  plannerReceiveSpring,
-  plannerTargetSpring,
-} from '../motion/plannerMotion.ts'
 import {
   useScheduleDispatch,
   useScheduleSelection,
@@ -33,8 +26,7 @@ export function RowHeaderDropZone({
   const selection = useScheduleSelection()
   const dispatch = useScheduleDispatch()
   const { openSelection } = useScheduleSelectionActions()
-  const reduceMotion = useReducedMotion() ?? false
-  const { recentEvent, pushMotionEvent } = usePlannerDragFeedback()
+  const { pushMotionEvent } = usePlannerDragFeedback()
 
   const { isOver, setNodeRef } = useDroppable({
     id: `row-header:${rowId}`,
@@ -58,25 +50,11 @@ export function RowHeaderDropZone({
     canDropOnTarget(state, activeDrag, { type: 'row-header', rowId })
   const dropHintLabel = canAcceptSubstitute && isOver ? 'Slipp vikar her' : 'Tildel vikar'
   const DropHintIcon = canAcceptSubstitute && isOver ? UserCheck : UserPlus
-  const isReceivingResponsible =
-    recentEvent?.type === 'assignSubstituteToRow' && recentEvent.rowId === rowId
-  const isClearingResponsible =
-    recentEvent?.type === 'clearRowResponsible' && recentEvent.rowId === rowId
   const isSelected = selection?.kind === 'row' && selection.rowId === rowId
 
   return (
-    <motion.div
-      layout
+    <div
       ref={setNodeRef}
-      animate={getTargetActivationAnimation(
-        'row',
-        {
-          ready: canAcceptSubstitute,
-          active: canAcceptSubstitute && isOver,
-        },
-        reduceMotion,
-      )}
-      transition={plannerTargetSpring}
       className={cx(
         'row-header-dropzone',
         responsible && 'row-header-dropzone--owned',
@@ -106,68 +84,26 @@ export function RowHeaderDropZone({
           <X size={14} strokeWidth={2.25} aria-hidden="true" />
         </button>
       ) : null}
-      <motion.button
-        layout
+      <button
         type="button"
         className="row-header-button"
         onClick={() => openSelection({ kind: 'row', rowId })}
         aria-haspopup="dialog"
         aria-expanded={isSelected}
         aria-label={`Åpne detaljer for ${title.full}`}
-        transition={plannerLayoutSpring}
       >
         <div className="row-header__main">
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.div
-              key={responsible?.id ?? 'empty'}
-              layout
-              initial={
-                isReceivingResponsible
-                  ? {
-                      opacity: 0.78,
-                      scale: reduceMotion ? 1.02 : 1.14,
-                      x: reduceMotion ? 0 : 8,
-                      y: reduceMotion ? 0 : -8,
-                      rotate: reduceMotion ? 0 : -4,
-                    }
-                  : { opacity: 0, scale: 0.92 }
-              }
-              animate={
-                canAcceptSubstitute && isOver
-                  ? {
-                      scale: reduceMotion ? 1.01 : 1.06,
-                      x: reduceMotion ? 0 : 2,
-                      y: reduceMotion ? 0 : -2,
-                      rotate: 0,
-                      opacity: 1,
-                    }
-                  : isClearingResponsible
-                    ? { opacity: 0.7, scale: 0.92, y: 2 }
-                    : { opacity: 1, scale: 1, x: 0, y: 0, rotate: 0 }
-              }
-              exit={
-                reduceMotion
-                  ? { opacity: 0 }
-                  : { opacity: 0, scale: 0.88, y: 8, rotate: 4 }
-              }
-              transition={
-                isReceivingResponsible || isClearingResponsible
-                  ? plannerReceiveSpring
-                  : plannerLayoutSpring
-              }
-              className="row-header__avatar-shell"
-            >
-              {responsible ? (
-                <span className="row-header__avatar" title={responsible.name}>
-                  {responsible.avatarInitials}
-                </span>
-              ) : (
-                <span className="row-header__avatar row-header__avatar--ghost">
-                  <UserPlus aria-hidden="true" size={16} strokeWidth={2.25} />
-                </span>
-              )}
-            </motion.div>
-          </AnimatePresence>
+          <div className="row-header__avatar-shell">
+            {responsible ? (
+              <span className="row-header__avatar" title={responsible.name}>
+                {responsible.avatarInitials}
+              </span>
+            ) : (
+              <span className="row-header__avatar row-header__avatar--ghost">
+                <UserPlus aria-hidden="true" size={16} strokeWidth={2.25} />
+              </span>
+            )}
+          </div>
           <div className="min-w-0 flex-1">
             <h3 className="row-header__title planner-heading" title={title.full}>
               {title.compact}
@@ -203,7 +139,7 @@ export function RowHeaderDropZone({
           </div>
 
           <div className="row-header__actions">
-            <motion.span
+            <span
               className={cx(
                 'row-drop-hint',
                 responsible && 'row-drop-hint--owned',
@@ -212,24 +148,12 @@ export function RowHeaderDropZone({
               )}
               title={dropHintLabel}
               aria-label={dropHintLabel}
-              animate={
-                canAcceptSubstitute && isOver
-                  ? {
-                      scale: reduceMotion ? 1.03 : 1.08,
-                      x: 0,
-                      y: reduceMotion ? 0 : -1,
-                      rotate: 0,
-                      opacity: 1,
-                    }
-                  : { scale: 1, x: 0, y: 0, rotate: 0, opacity: 1 }
-              }
-              transition={plannerTargetSpring}
             >
               <DropHintIcon aria-hidden="true" size={14} strokeWidth={2.25} />
-            </motion.span>
+            </span>
           </div>
         </div>
-      </motion.button>
-    </motion.div>
+      </button>
+    </div>
   )
 }

@@ -1,20 +1,11 @@
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { motion, useReducedMotion } from 'framer-motion'
 import { GripVertical } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import type { SubstituteWorkload } from '../../domain/schedule/selectors.ts'
 import { cx } from '../../lib/cx.ts'
-import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
-import {
-  getRejectAnimation,
-  getSourceGhostAnimation,
-  plannerHoverSpring,
-  plannerLayoutSpring,
-  plannerRejectTransition,
-} from '../motion/plannerMotion.ts'
 
 type PersonCardProps = {
   workload: SubstituteWorkload
@@ -31,8 +22,6 @@ function splitDisplayName(name: string) {
 }
 
 export function PersonCard({ workload, activeDrag }: PersonCardProps) {
-  const reduceMotion = useReducedMotion() ?? false
-  const { rejectedDrag } = usePlannerDragFeedback()
   const { substitute } = workload
   const displayName = splitDisplayName(substitute.name)
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -43,9 +32,6 @@ export function PersonCard({ workload, activeDrag }: PersonCardProps) {
       from: { type: 'substitute-pool' },
     },
   })
-  const isRejected =
-    rejectedDrag?.item.type === 'substitute' &&
-    rejectedDrag.item.substituteId === substitute.id
 
   return (
     <div
@@ -56,24 +42,8 @@ export function PersonCard({ workload, activeDrag }: PersonCardProps) {
       }}
       className="relative"
     >
-      <motion.div
-        aria-hidden="true"
-        className="substitute-card-ghost"
-        initial={false}
-        animate={getSourceGhostAnimation(isDragging, reduceMotion)}
-        transition={plannerHoverSpring}
-      />
-      <motion.button
-        layout
+      <button
         type="button"
-        whileHover={reduceMotion ? undefined : { scale: 1.015, y: -1 }}
-        whileTap={reduceMotion ? undefined : { scale: 0.992 }}
-        animate={
-          isRejected
-            ? getRejectAnimation('substitute', reduceMotion)
-            : { scale: 1, x: 0, y: 0, rotate: 0 }
-        }
-        transition={isRejected ? plannerRejectTransition : plannerLayoutSpring}
         className={cx(
           'substitute-card',
           isDragging && 'opacity-0',
@@ -102,7 +72,7 @@ export function PersonCard({ workload, activeDrag }: PersonCardProps) {
         <span className="substitute-card__grip" aria-hidden="true">
           <GripVertical size={17} strokeWidth={2.25} />
         </span>
-      </motion.button>
+      </button>
     </div>
   )
 }

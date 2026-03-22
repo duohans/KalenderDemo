@@ -265,11 +265,6 @@
   background: rgba(255, 255, 255, 0.84);
   color: var(--foreground-soft);
   cursor: help;
-  transition:
-    color var(--transition-fast) ease,
-    border-color var(--transition-fast) ease,
-    background-color var(--transition-fast) ease,
-    transform var(--transition-fast) ease;
 }
 
 .panel-info:hover,
@@ -277,7 +272,6 @@
   color: var(--foreground);
   border-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.96);
-  transform: translateY(-1px);
 }
 
 .panel-mark,
@@ -295,13 +289,6 @@
   border-radius: 1.55rem;
   background: rgba(251, 247, 239, 0.74);
   padding: 0.6rem;
-  transition:
-    background-color var(--transition-fast) ease,
-    border-color var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease,
-    transform var(--transition-fast) ease;
-  transform-origin: center;
-  will-change: transform;
 }
 
 .panel-dropzone--unscheduled {

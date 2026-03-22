@@ -2,19 +2,6 @@ import { createContext, useContext } from 'react'
 
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import type { PlannerAction, TimeBlockId } from '../../domain/schedule/types.ts'
-import type { DragVector } from './plannerMotion.ts'
-
-export type PlannerDropHandoffBase =
-  | {
-      type: 'moveNeedCardToCell'
-      cardId: string
-      rowId: string
-      timeBlockId: TimeBlockId
-    }
-  | {
-      type: 'moveNeedCardToUnscheduled'
-      cardId: string
-    }
 
 export type PlannerMotionEventBase =
   | {
@@ -55,37 +42,13 @@ export type RejectedDrag = {
   item: PlannerDragItem
 }
 
-export type PlannerDropHandoff = PlannerDropHandoffBase & {
-  key: number
-}
-
 type PlannerDragFeedbackContextValue = {
-  dragVector: DragVector
-  recentEvent: PlannerMotionEvent | null
-  rejectedDrag: RejectedDrag | null
-  dropHandoff: PlannerDropHandoff | null
   pushMotionEvent: (event: PlannerMotionEventBase) => void
 }
 
 const PlannerDragFeedbackContext = createContext<PlannerDragFeedbackContextValue>({
-  dragVector: { x: 0, y: 0 },
-  recentEvent: null,
-  rejectedDrag: null,
-  dropHandoff: null,
   pushMotionEvent: () => undefined,
 })
-
-export function actionToDropHandoff(
-  action: PlannerAction,
-): PlannerDropHandoffBase | null {
-  switch (action.type) {
-    case 'moveNeedCardToCell':
-    case 'moveNeedCardToUnscheduled':
-      return action
-    default:
-      return null
-  }
-}
 
 export function actionToMotionEvent(
   action: PlannerAction,

@@ -2,33 +2,22 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import type {
-  PlannerDropHandoff,
-  PlannerDropHandoffBase,
   PlannerMotionEvent,
   PlannerMotionEventBase,
   RejectedDrag,
 } from './PlannerDragFeedbackContext.tsx'
-import { getPlannerDropHandoffDuration } from './plannerMotion.ts'
 
-type UseDragFeedbackTimersOptions = {
-  reduceMotion: boolean
-}
+const FEEDBACK_DISMISS_MS = 1000
 
-export function useDragFeedbackTimers({ reduceMotion }: UseDragFeedbackTimersOptions) {
-  const [dropHandoff, setDropHandoff] = useState<PlannerDropHandoff | null>(null)
+export function useDragFeedbackTimers() {
   const [recentEvent, setRecentEvent] = useState<PlannerMotionEvent | null>(null)
   const [rejectedDrag, setRejectedDrag] = useState<RejectedDrag | null>(null)
   const feedbackSequenceRef = useRef(0)
-  const dropHandoffTimerRef = useRef<number | null>(null)
   const recentEventTimerRef = useRef<number | null>(null)
   const rejectedDragTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     return () => {
-      if (dropHandoffTimerRef.current !== null) {
-        window.clearTimeout(dropHandoffTimerRef.current)
-      }
-
       if (recentEventTimerRef.current !== null) {
         window.clearTimeout(recentEventTimerRef.current)
       }
@@ -38,32 +27,6 @@ export function useDragFeedbackTimers({ reduceMotion }: UseDragFeedbackTimersOpt
       }
     }
   }, [])
-
-  const clearDropHandoff = useCallback(() => {
-    if (dropHandoffTimerRef.current !== null) {
-      window.clearTimeout(dropHandoffTimerRef.current)
-      dropHandoffTimerRef.current = null
-    }
-
-    setDropHandoff(null)
-  }, [])
-
-  const pushDropHandoff = useCallback(
-    (event: PlannerDropHandoffBase) => {
-      const key = ++feedbackSequenceRef.current
-
-      if (dropHandoffTimerRef.current !== null) {
-        window.clearTimeout(dropHandoffTimerRef.current)
-      }
-
-      setDropHandoff({ ...event, key })
-      dropHandoffTimerRef.current = window.setTimeout(() => {
-        setDropHandoff((current) => (current?.key === key ? null : current))
-        dropHandoffTimerRef.current = null
-      }, getPlannerDropHandoffDuration(reduceMotion))
-    },
-    [reduceMotion],
-  )
 
   const pushMotionEvent = useCallback(
     (event: PlannerMotionEventBase) => {
@@ -78,9 +41,9 @@ export function useDragFeedbackTimers({ reduceMotion }: UseDragFeedbackTimersOpt
       recentEventTimerRef.current = window.setTimeout(() => {
         setRecentEvent((current) => (current?.key === key ? null : current))
         recentEventTimerRef.current = null
-      }, reduceMotion ? 140 : 520)
+      }, FEEDBACK_DISMISS_MS)
     },
-    [reduceMotion],
+    [],
   )
 
   const pushRejectedDrag = useCallback(
@@ -95,15 +58,12 @@ export function useDragFeedbackTimers({ reduceMotion }: UseDragFeedbackTimersOpt
       rejectedDragTimerRef.current = window.setTimeout(() => {
         setRejectedDrag((current) => (current?.key === key ? null : current))
         rejectedDragTimerRef.current = null
-      }, reduceMotion ? 120 : 360)
+      }, FEEDBACK_DISMISS_MS)
     },
-    [reduceMotion],
+    [],
   )
 
   return {
-    clearDropHandoff,
-    dropHandoff,
-    pushDropHandoff,
     pushMotionEvent,
     pushRejectedDrag,
     recentEvent,

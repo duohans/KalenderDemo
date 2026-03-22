@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { CalendarDays, Layers3 } from 'lucide-react'
 
 import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
@@ -18,11 +17,8 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
   const cellNeedCardMap = useScheduleState((state) => selectCellNeedCardIdMap(state))
 
   return (
-    <motion.section
+    <section
       aria-label="Dagstavle"
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
       className="planner-stage order-2 flex min-h-0 flex-1 flex-col gap-2.5"
     >
       <div className="planner-grid-frame relative flex min-h-0 flex-1 flex-col">
@@ -63,6 +59,6 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
           </div>
         </div>
       </div>
-    </motion.section>
+    </section>
   )
 }
