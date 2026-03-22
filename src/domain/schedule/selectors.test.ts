@@ -92,7 +92,12 @@ describe('schedule selectors', () => {
       teacherAccent: '#ffd8bc',
       rowAccent: '#ffd38b',
       assignmentMode: 'explicit',
-      statusLabel: 'Planlagt',
+      statusTone: 'explicit',
+      statusLabel: 'Direkte',
+      statusDetail: 'Sara Lie',
+      statusAssignee: {
+        id: 'sub-sara',
+      },
     })
   })
 

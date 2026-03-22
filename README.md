@@ -1,8 +1,8 @@
-# Substitute Planner V2
+# KalenderDemo
 
-Flat, grid-based day planner for substitute scheduling, built with React, TypeScript, Vite, Tailwind CSS, `dnd-kit`, Framer Motion, `lucide-react`, and `@fontsource/outfit`.
+Compact day-view substitute planner built with React, TypeScript, Vite, Zustand, Zod, `dnd-kit`, Framer Motion, and `lucide-react`.
 
-State is fully local: the planner runs without backend and persists to `localStorage`.
+The root app is the maintained product in this repository. It runs entirely in the browser, persists to `localStorage`, and is optimized for a full-viewport planning workflow with a dominant central board and compact side panels.
 
 ## Run
 
@@ -14,17 +14,18 @@ npm run dev
 ## Verify
 
 ```bash
-npm run build
-npm test
 npm run lint
+npm test
+npm run build
+npm run test:e2e
 ```
 
 ## Product Model
 
 - Time is the X axis and rows are the Y axis.
-- Each row can contain several need cards, but each time cell can contain at most one card.
-- Each row can have a `rowResponsibleId`.
-- Each need card can optionally have an `explicitAssigneeId`.
+- Each time cell may contain at most one need card.
+- Rows can have a `rowResponsibleId`.
+- Need cards can have an `explicitAssigneeId`.
 - Effective assignee is:
 
 ```ts
@@ -33,37 +34,40 @@ card.explicitAssigneeId ??
   null
 ```
 
+- Moving a need card never changes its `sourceTeacherId`.
+- Unscheduled cards live in the left panel and keep `rowId: null` plus `timeBlockId: null`.
+
 ## Main Behaviors
 
-- Drag need cards between rows and time cells.
-- Drag need cards back to the left panel to unschedule them.
-- Drag a substitute onto a row to assign row responsibility.
-- Drag a substitute onto a card to create a direct override.
-- Clear row responsibility or direct card overrides inline or from the detail sheet.
-- Occupied cells reject drops.
+- Drag need cards between the unscheduled panel and schedule cells.
+- Drag substitutes onto row headers to assign row responsibility.
+- Drag substitutes onto need cards to create direct overrides.
+- Clear row responsibility and direct overrides inline or from the detail sheet.
+- Use `Ctrl/Cmd+Z` and `Ctrl/Cmd+Shift+Z` for undo and redo.
+- Persist planner state across reloads with schema validation and seed fallback.
 
-## Visual Direction
+## Visual System
 
-- Strict flat design
-- Outfit as the only UI typeface
-- No box-shadows, no blur, no paper/sketch treatment
-- Strong color blocks, rigid grid, bold headings, and sharp hover/focus states
-- `lucide-react` icons used consistently for planner states and actions
+- Full-viewport shell with minimal outer padding.
+- Warm cream, sand, clay, and sage palette.
+- Fraunces headings with Manrope body text.
+- Soft panel surfaces, lighter borders, and subdued drag affordances.
+- Layout priority goes to the planning board over shell copy.
 
 ## Important Files
 
 - `src/domain/schedule/`
-  - types, reducer, selectors, drag rules, storage, seed data
+  Core planner types, reducer, selectors, drag rules, storage, and seeded state.
+- `src/store/plannerStore.ts`
+  Zustand store, undo/redo history, selection state, and persistence wiring.
+- `src/features/schedule/useSchedule.ts`
+  Feature-facing facade over the planner store hooks.
 - `src/features/layout/PlannerPage.tsx`
-  - top-level `DndContext` and app shell
-- `src/features/calendar/`
-  - schedule grid, row headers, cells, detail sheet integration
-- `src/features/shared/`
-  - draggable cards, badges, panel primitives, drag overlays
-- `src/index.css`
-  - centralized design tokens and component skins for the flat poster system
+  App shell, drag context, keyboard shortcuts, live announcements, and overlay orchestration.
+- `src/styles/`
+  Tokens, layout, board, component, and responsive styling for the planner UI.
 
 ## Persistence
 
 - Stored under `substitute-planner:v2`
-- Invalid or incompatible persisted data is discarded and replaced by the seeded v2 state
+- Invalid or incompatible documents are discarded and replaced by seeded planner state

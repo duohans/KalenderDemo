@@ -1,4 +1,4 @@
-import type { PlannerAction, PlannerState } from '../../domain/schedule/types.ts'
+import type { PlannerState } from '../../domain/schedule/types.ts'
 import {
   usePlannerDispatch,
   usePlannerHistory,
@@ -32,10 +32,4 @@ export function useScheduleSelectionActions() {
 
 export function useScheduleHistoryActions() {
   return usePlannerHistory()
-}
-
-export function useScheduleDispatchAction() {
-  const dispatch = usePlannerDispatch()
-
-  return (action: PlannerAction) => dispatch(action)
 }

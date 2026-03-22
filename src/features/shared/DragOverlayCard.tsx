@@ -70,9 +70,12 @@ export function DragOverlayCard({ card, substitute, dragVector, size }: DragOver
           markerSlot={
             <div className="need-card__markers">
               <AssigneeBadge
-                person={displayModel?.effectiveAssignee ?? null}
+                person={displayModel?.statusAssignee ?? null}
                 mode={displayModel?.assignmentMode ?? 'unassigned'}
-                density="compact"
+                tone={displayModel?.statusTone}
+                density="status"
+                labelOverride={displayModel?.statusLabel}
+                detailOverride={displayModel?.statusDetail}
               />
             </div>
           }

@@ -12,12 +12,6 @@ import {
   selectNeedCardDisplayModel,
 } from '../../domain/schedule/selectors.ts'
 import type { NeedCard } from '../../domain/schedule/types.ts'
-import {
-  usePlannerDispatch,
-  usePlannerSelection,
-  usePlannerSelectionActions,
-  usePlannerState,
-} from '../../store/plannerStore.ts'
 import { cx } from '../../lib/cx.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
@@ -29,6 +23,12 @@ import {
   plannerPulseTransition,
   plannerRejectTransition,
 } from '../motion/plannerMotion.ts'
+import {
+  useScheduleDispatch,
+  useScheduleSelection,
+  useScheduleSelectionActions,
+  useScheduleState,
+} from '../schedule/useSchedule.ts'
 import { AssigneeBadge } from './AssigneeBadge.tsx'
 import { NeedCardVisual } from './NeedCardVisual.tsx'
 
@@ -43,10 +43,10 @@ export function TaskCard({
   activeDrag,
   variant = 'grid',
 }: TaskCardProps) {
-  const state = usePlannerState((plannerState) => plannerState)
-  const dispatch = usePlannerDispatch()
-  const selection = usePlannerSelection()
-  const { openSelection } = usePlannerSelectionActions()
+  const state = useScheduleState((plannerState) => plannerState)
+  const dispatch = useScheduleDispatch()
+  const selection = useScheduleSelection()
+  const { openSelection } = useScheduleSelectionActions()
   const reduceMotion = useReducedMotion() ?? false
   const { rejectedDrag, recentEvent, dropHandoff, pushMotionEvent } =
     usePlannerDragFeedback()
@@ -90,7 +90,6 @@ export function TaskCard({
       cardId: card.id,
     })
 
-  const effectiveAssignee = displayModel?.effectiveAssignee ?? null
   const isNeedCardDragActive = activeDrag?.type === 'need-card'
   const isRejected =
     rejectedDrag?.item.type === 'need-card' && rejectedDrag.item.cardId === card.id
@@ -146,7 +145,7 @@ export function TaskCard({
         transform: CSS.Translate.toString(transform),
         touchAction: 'none',
       }}
-      className="need-card-host h-full min-h-0"
+      className={cx('need-card-host min-h-0', variant === 'grid' && 'need-card-host--grid')}
     >
       <motion.div
         aria-haspopup="dialog"
@@ -212,7 +211,7 @@ export function TaskCard({
           openSelection({ kind: 'need-card', cardId: card.id })
         }}
         aria-label={`Kort ${card.title}`}
-        className="h-full min-h-0"
+        className={cx('min-h-0', variant === 'grid' && 'need-card-frame--grid')}
         {...listeners}
         {...attributes}
       >
@@ -264,9 +263,12 @@ export function TaskCard({
               }
             >
               <AssigneeBadge
-                person={effectiveAssignee}
+                person={displayModel?.statusAssignee ?? null}
                 mode={assignmentMode}
-                density="compact"
+                tone={displayModel?.statusTone}
+                density="status"
+                labelOverride={displayModel?.statusLabel}
+                detailOverride={displayModel?.statusDetail}
                 onClear={
                   assignmentMode === 'explicit'
                     ? () => {

@@ -2,9 +2,9 @@ import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 
 import { plannerReducer } from '../domain/schedule/reducer.ts'
+import { loadPlannerState, savePlannerState } from '../domain/schedule/storage.ts'
 import type { PlannerAction, PlannerState } from '../domain/schedule/types.ts'
 import type { PlannerSelection } from '../features/layout/plannerSelection.ts'
-import { loadPlannerState, savePlannerState } from '../services/storage.ts'
 
 type PlannerHistoryState = {
   past: PlannerState[]

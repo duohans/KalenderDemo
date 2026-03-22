@@ -1,7 +1,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { motion, useReducedMotion } from 'framer-motion'
-import { GripVertical, UserPlus } from 'lucide-react'
+import { GripVertical } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
@@ -21,19 +21,20 @@ type PersonCardProps = {
   activeDrag: PlannerDragItem | null
 }
 
-function formatToolName(name: string) {
-  if (name.length <= 18) {
-    return name
-  }
+function splitDisplayName(name: string) {
+  const [firstName = '', ...remainder] = name.trim().split(/\s+/)
 
-  const [firstName = '', lastName = ''] = name.trim().split(/\s+/)
-  return lastName ? `${firstName} ${lastName[0]}.` : firstName
+  return {
+    firstName: firstName || name,
+    surname: remainder.join(' '),
+  }
 }
 
 export function PersonCard({ workload, activeDrag }: PersonCardProps) {
   const reduceMotion = useReducedMotion() ?? false
   const { rejectedDrag } = usePlannerDragFeedback()
-  const { effectiveCoverageCount, explicitOverrides, rowAssignments, substitute } = workload
+  const { substitute } = workload
+  const displayName = splitDisplayName(substitute.name)
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `substitute:${substitute.id}`,
     data: {
@@ -89,27 +90,17 @@ export function PersonCard({ workload, activeDrag }: PersonCardProps) {
         {...listeners}
         {...attributes}
       >
-        <span className="substitute-card__avatar">{substitute.avatarInitials}</span>
-        <span className="min-w-0 flex-1 text-left">
-          <span className="substitute-card__headline">
-            <span className="substitute-card__name block truncate text-[1rem] leading-none">
-              {formatToolName(substitute.name)}
-            </span>
-            <span className="substitute-card__count" aria-hidden="true">
-              {effectiveCoverageCount}
-            </span>
-          </span>
-          <span className="substitute-card__details">
-            {rowAssignments} rader • {explicitOverrides} overstyringer
+        <span className="substitute-card__identity">
+          <span className="substitute-card__avatar">{substitute.avatarInitials}</span>
+          <span className="substitute-card__name-stack min-w-0 text-left" title={substitute.name}>
+            <span className="substitute-card__first-name">{displayName.firstName}</span>
+            {displayName.surname ? (
+              <span className="substitute-card__last-name">{displayName.surname}</span>
+            ) : null}
           </span>
         </span>
-        <span className="substitute-card__meta" aria-hidden="true">
-          <span className="substitute-card__assignment">
-            <UserPlus size={16} strokeWidth={2.25} />
-          </span>
-          <span className="substitute-card__grip">
-            <GripVertical size={16} strokeWidth={2.25} />
-          </span>
+        <span className="substitute-card__grip" aria-hidden="true">
+          <GripVertical size={17} strokeWidth={2.25} />
         </span>
       </motion.button>
     </div>

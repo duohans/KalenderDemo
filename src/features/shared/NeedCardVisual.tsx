@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { GripVertical } from 'lucide-react'
 
 import type { NeedCardDisplayModel } from '../../domain/schedule/selectors.ts'
 import type { NeedCard } from '../../domain/schedule/types.ts'
@@ -24,11 +25,13 @@ export function NeedCardVisual({
   const assignmentMode = displayModel?.assignmentMode ?? 'unassigned'
   const hasConflict = displayModel?.hasConflict ?? true
   const teacher = displayModel?.teacher
+  const roomLabel = card.subtitle.trim() || 'Rom ikke satt'
 
   return (
     <article
       className={cx(
         'need-card',
+        variant === 'grid' && 'need-card--grid',
         variant === 'panel' && 'need-card--panel',
         variant === 'overlay' && 'need-card--overlay',
         card.placement === 'scheduled' ? 'need-card--scheduled' : 'need-card--unscheduled',
@@ -55,15 +58,27 @@ export function NeedCardVisual({
           >
             {teacher?.avatarInitials ?? '??'}
           </span>
-          <span className="sr-only">{teacher?.name ?? 'Ukjent lærer'}</span>
+          <span className="need-card__teacher-name">
+            {teacher?.name ?? 'Ukjent lærer'}
+          </span>
         </div>
-        {markerSlot}
+        <span aria-hidden="true" className="need-card__drag-hint">
+          <GripVertical size={15} strokeWidth={2.15} />
+        </span>
       </div>
       <div className="need-card__body">
         <p className="need-card__class">{displayModel?.classLabel ?? card.title}</p>
         <h3 className="need-card__subject" title={displayModel?.subjectLabel ?? card.title}>
           {displayModel?.subjectLabel ?? card.title}
         </h3>
+        <p className="need-card__room" title={roomLabel}>
+          {roomLabel}
+        </p>
+      </div>
+      <div className="need-card__footer">
+        <div className="need-card__footer-surface">
+          {markerSlot}
+        </div>
       </div>
     </article>
   )

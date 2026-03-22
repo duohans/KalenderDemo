@@ -30,7 +30,9 @@ export type NeedCardDisplayModel = {
   card: NeedCard
   teacher: Teacher | null
   effectiveAssignee: Substitute | null
+  statusAssignee: Substitute | null
   assignmentMode: AssignmentMode
+  statusTone: AssignmentMode | 'conflict'
   hasConflict: boolean
   classLabel: string
   subjectLabel: string
@@ -38,6 +40,7 @@ export type NeedCardDisplayModel = {
   rowAccent: string
   assigneeAccent: string
   statusLabel: string
+  statusDetail: string
 }
 
 export type PlannerSummaryItem = {
@@ -480,19 +483,40 @@ export function selectNeedCardDisplayModel(
         NEUTRAL_ACCENT
       : NEUTRAL_ACCENT
   const { classLabel, subjectLabel } = splitNeedCardTitle(card.title)
+  const statusTone: NeedCardDisplayModel['statusTone'] = hasConflict
+    ? 'conflict'
+    : assignmentMode
+  const statusAssignee = hasConflict || assignmentMode === 'unassigned' ? null : effectiveAssignee
+
+  let statusLabel = 'Udekket'
+  let statusDetail = 'Ingen vikar'
+
+  if (statusTone === 'conflict') {
+    statusLabel = 'Konflikt'
+    statusDetail = 'Flere kort i samme rute'
+  } else if (statusTone === 'explicit') {
+    statusLabel = 'Direkte'
+    statusDetail = effectiveAssignee?.name ?? 'Vikar valgt'
+  } else if (statusTone === 'inherited') {
+    statusLabel = 'Via rad'
+    statusDetail = effectiveAssignee?.name ?? 'Arver fra rad'
+  }
 
   const nextDisplayModel = {
     card,
     teacher,
     effectiveAssignee,
+    statusAssignee,
     assignmentMode,
+    statusTone,
     hasConflict,
     classLabel,
     subjectLabel,
     teacherAccent: teacher?.accentColor ?? card.accentColor,
     rowAccent,
     assigneeAccent: effectiveAssignee?.accentColor ?? rowAccent,
-    statusLabel: card.placement === 'scheduled' ? 'Planlagt' : 'Uplanlagt',
+    statusLabel,
+    statusDetail,
   }
 
   getStateScopedMap(needCardDisplayModelCache, state).set(cardId, nextDisplayModel)
