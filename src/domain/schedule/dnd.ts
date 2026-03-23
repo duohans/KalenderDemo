@@ -10,14 +10,14 @@ import {
   selectCanDropNeedCardInCell,
   selectCanDropNeedCardInRow,
 } from './selectors.ts'
-import type { NeedCard, PlannerAction, PlannerState, TimeBlockId } from './types.ts'
+import type { NeedCard, PlannerAction, PlannerState, TimeBlockId, WeekdayId } from './types.ts'
 
 export type PlannerNeedCardDragItem = {
   type: 'need-card'
   cardId: string
   from:
     | { type: 'unscheduled-panel' }
-    | { type: 'calendar-cell'; rowId: string; timeBlockId: TimeBlockId }
+    | { type: 'calendar-cell'; dayId: WeekdayId; rowId: string; timeBlockId: TimeBlockId }
 }
 
 export type PlannerSubstituteDragItem = {
@@ -30,9 +30,9 @@ export type PlannerDragItem = PlannerNeedCardDragItem | PlannerSubstituteDragIte
 
 export type PlannerDropTarget =
   | { type: 'unscheduled-panel' }
-  | { type: 'calendar-cell'; rowId: string; timeBlockId: TimeBlockId }
-  | { type: 'row-header'; rowId: string }
-  | { type: 'new-row-placeholder' }
+  | { type: 'calendar-cell'; dayId: WeekdayId; rowId: string; timeBlockId: TimeBlockId }
+  | { type: 'row-header'; dayId: WeekdayId; rowId: string }
+  | { type: 'new-row-placeholder'; dayId: WeekdayId }
   | { type: 'need-card'; cardId: string }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -53,6 +53,7 @@ export function createNeedCardDragItem(card: NeedCard): PlannerNeedCardDragItem 
     cardId: card.id,
     from: {
       type: 'calendar-cell',
+      dayId: card.dayId,
       rowId: card.rowId,
       timeBlockId: card.timeBlockId,
     },
@@ -84,11 +85,15 @@ export function isPlannerDropTarget(value: unknown): value is PlannerDropTarget 
     case 'unscheduled-panel':
       return true
     case 'calendar-cell':
-      return typeof value.rowId === 'string' && typeof value.timeBlockId === 'string'
+      return (
+        typeof value.dayId === 'string' &&
+        typeof value.rowId === 'string' &&
+        typeof value.timeBlockId === 'string'
+      )
     case 'row-header':
-      return typeof value.rowId === 'string'
+      return typeof value.dayId === 'string' && typeof value.rowId === 'string'
     case 'new-row-placeholder':
-      return true
+      return typeof value.dayId === 'string'
     case 'need-card':
       return typeof value.cardId === 'string'
     default:
@@ -149,20 +154,34 @@ export function canDropOnTarget(
     }
 
     if (target.type === 'calendar-cell') {
+      const card = state.needCards[activeItem.cardId]
+
+      if (!card || card.dayId !== target.dayId) {
+        return false
+      }
+
       return selectCanDropNeedCardInCell(
         state,
         activeItem.cardId,
         target.rowId,
         target.timeBlockId,
+        target.dayId,
       )
     }
 
     if (target.type === 'row-header') {
-      return selectCanDropNeedCardInRow(state, activeItem.cardId, target.rowId)
+      const card = state.needCards[activeItem.cardId]
+
+      if (!card || card.dayId !== target.dayId) {
+        return false
+      }
+
+      return selectCanDropNeedCardInRow(state, activeItem.cardId, target.rowId, target.dayId)
     }
 
     if (target.type === 'new-row-placeholder') {
-      return Boolean(state.needCards[activeItem.cardId])
+      const card = state.needCards[activeItem.cardId]
+      return Boolean(card && card.dayId === target.dayId)
     }
 
     return false

@@ -1,4 +1,4 @@
-import { TIME_BLOCK_ORDER, TIME_BLOCKS } from './constants.ts'
+import { TIME_BLOCK_ORDER, TIME_BLOCKS, WEEKDAYS } from './constants.ts'
 import type {
   AssignmentMode,
   NeedCard,
@@ -7,7 +7,9 @@ import type {
   ScheduledNeedCard,
   Substitute,
   Teacher,
+  TimeBlock,
   TimeBlockId,
+  WeekdayId,
 } from './types.ts'
 
 export type RowTitle = {
@@ -74,11 +76,47 @@ export type SubstituteWorkload = {
   effectiveCoverageCount: number
 }
 
+export type WeekMiniCardDisplayModel = {
+  cardId: string
+  dayId: WeekdayId
+  timeBlockId: TimeBlockId
+  rowId: string
+  classLabel: string
+  subjectLabel: string
+  assigneeLabel: string
+  teacherName: string
+  teacherAvatarInitials: string
+  teacherAccent: string
+  assigneeAvatarInitials: string | null
+  assigneeAccent: string
+  statusTone: NeedCardDisplayModel['statusTone']
+  accentColor: string
+}
+
+export type WeekGridCellDisplayModel = {
+  dayId: WeekdayId
+  timeBlockId: TimeBlockId
+  cards: WeekMiniCardDisplayModel[]
+}
+
+export type WeekGridViewModel = {
+  days: readonly {
+    id: WeekdayId
+    shortLabel: string
+    label: string
+  }[]
+  rows: {
+    timeBlock: TimeBlock
+    cells: WeekGridCellDisplayModel[]
+  }[]
+}
+
 const NEUTRAL_ACCENT = '#d1d5db'
 const UNSCHEDULED_ROW_TITLE = 'Uplanlagt'
 const UNKNOWN_ROW_TITLE = 'Ukjent rad'
 const UNKNOWN_TEACHER_NAME = 'Ukjent lærer'
 const NO_TIME_LABEL = 'Uten tidspunkt'
+const SUMMARY_ALL_KEY = '__all__'
 const TIME_BLOCK_LABELS = TIME_BLOCKS.reduce<Record<TimeBlockId, string>>(
   (accumulator, block) => {
     accumulator[block.id] = block.label
@@ -94,11 +132,17 @@ const TIME_BLOCK_LABELS = TIME_BLOCKS.reduce<Record<TimeBlockId, string>>(
   },
 )
 
-type ScheduledIndex = {
+type DayScheduledIndex = {
   cards: ScheduledNeedCard[]
   cellNeedCardIdMap: Map<string, string>
   cellCollisionCountMap: Map<string, number>
   rowCardsMap: Map<string, ScheduledNeedCard[]>
+}
+
+type ScheduledIndex = {
+  allCards: ScheduledNeedCard[]
+  dayIndexes: Map<WeekdayId, DayScheduledIndex>
+  weekCellCardsMap: Map<string, ScheduledNeedCard[]>
 }
 
 const scheduledIndexCache = new WeakMap<PlannerState, ScheduledIndex>()
@@ -110,8 +154,15 @@ const needCardDisplayModelCache = new WeakMap<
   PlannerState,
   Map<string, NeedCardDisplayModel | null>
 >()
-const plannerSummaryCache = new WeakMap<PlannerState, PlannerSummaryViewModel>()
-const substituteWorkloadCache = new WeakMap<PlannerState, SubstituteWorkload[]>()
+const plannerSummaryCache = new WeakMap<
+  PlannerState,
+  Map<string, PlannerSummaryViewModel>
+>()
+const substituteWorkloadCache = new WeakMap<
+  PlannerState,
+  Map<string, SubstituteWorkload[]>
+>()
+const weekGridCache = new WeakMap<PlannerState, WeekGridViewModel>()
 
 function isScheduledNeedCard(card: NeedCard): card is ScheduledNeedCard {
   return (
@@ -119,6 +170,15 @@ function isScheduledNeedCard(card: NeedCard): card is ScheduledNeedCard {
     typeof card.rowId === 'string' &&
     typeof card.timeBlockId === 'string'
   )
+}
+
+function createDayScheduledIndex(): DayScheduledIndex {
+  return {
+    cards: [],
+    cellNeedCardIdMap: new Map<string, string>(),
+    cellCollisionCountMap: new Map<string, number>(),
+    rowCardsMap: new Map<string, ScheduledNeedCard[]>(),
+  }
 }
 
 function toFirstName(name: string) {
@@ -179,6 +239,18 @@ function getStateScopedMap<T>(cache: WeakMap<PlannerState, Map<string, T>>, stat
   return scopedMap
 }
 
+function getSummaryKey(dayId?: WeekdayId) {
+  return dayId ?? SUMMARY_ALL_KEY
+}
+
+function getRowCacheKey(rowId: string, dayId: WeekdayId) {
+  return `${dayId}::${rowId}`
+}
+
+function buildWeekCellKey(dayId: WeekdayId, timeBlockId: TimeBlockId) {
+  return `${dayId}::${timeBlockId}`
+}
+
 function getScheduledIndex(state: PlannerState): ScheduledIndex {
   const cached = scheduledIndexCache.get(state)
 
@@ -186,10 +258,11 @@ function getScheduledIndex(state: PlannerState): ScheduledIndex {
     return cached
   }
 
-  const cards: ScheduledNeedCard[] = []
-  const cellNeedCardIdMap = new Map<string, string>()
-  const cellCollisionCountMap = new Map<string, number>()
-  const rowCardsMap = new Map<string, ScheduledNeedCard[]>()
+  const dayIndexes = new Map<WeekdayId, DayScheduledIndex>(
+    WEEKDAYS.map((day) => [day.id, createDayScheduledIndex()]),
+  )
+  const allCards: ScheduledNeedCard[] = []
+  const weekCellCardsMap = new Map<string, ScheduledNeedCard[]>()
 
   state.needCardOrder.forEach((cardId) => {
     const card = state.needCards[cardId]
@@ -198,35 +271,82 @@ function getScheduledIndex(state: PlannerState): ScheduledIndex {
       return
     }
 
-    cards.push(card)
+    allCards.push(card)
+
+    const dayIndex = dayIndexes.get(card.dayId)
+
+    if (!dayIndex) {
+      return
+    }
+
+    dayIndex.cards.push(card)
 
     const cellKey = buildCellKey(card.rowId, card.timeBlockId)
-    cellNeedCardIdMap.set(cellKey, card.id)
-    cellCollisionCountMap.set(cellKey, (cellCollisionCountMap.get(cellKey) ?? 0) + 1)
+    dayIndex.cellNeedCardIdMap.set(cellKey, card.id)
+    dayIndex.cellCollisionCountMap.set(
+      cellKey,
+      (dayIndex.cellCollisionCountMap.get(cellKey) ?? 0) + 1,
+    )
 
-    const rowCards = rowCardsMap.get(card.rowId) ?? []
+    const rowCards = dayIndex.rowCardsMap.get(card.rowId) ?? []
     rowCards.push(card)
-    rowCardsMap.set(card.rowId, rowCards)
+    dayIndex.rowCardsMap.set(card.rowId, rowCards)
+
+    const weekCellKey = buildWeekCellKey(card.dayId, card.timeBlockId)
+    const weekCellCards = weekCellCardsMap.get(weekCellKey) ?? []
+    weekCellCards.push(card)
+    weekCellCardsMap.set(weekCellKey, weekCellCards)
   })
 
-  rowCardsMap.forEach((rowCards) => {
-    rowCards.sort((left, right) => {
-      const byTime =
-        TIME_BLOCK_ORDER[left.timeBlockId] - TIME_BLOCK_ORDER[right.timeBlockId]
+  dayIndexes.forEach((dayIndex) => {
+    dayIndex.rowCardsMap.forEach((rowCards) => {
+      rowCards.sort((left, right) => {
+        const byTime =
+          TIME_BLOCK_ORDER[left.timeBlockId] - TIME_BLOCK_ORDER[right.timeBlockId]
 
-      return byTime !== 0 ? byTime : left.title.localeCompare(right.title, 'nb')
+        return byTime !== 0 ? byTime : left.title.localeCompare(right.title, 'nb')
+      })
+    })
+  })
+
+  weekCellCardsMap.forEach((rowCards) => {
+    rowCards.sort((left, right) => {
+      const rowOrderDiff =
+        (state.rows[left.rowId]?.order ?? Number.MAX_SAFE_INTEGER) -
+        (state.rows[right.rowId]?.order ?? Number.MAX_SAFE_INTEGER)
+
+      if (rowOrderDiff !== 0) {
+        return rowOrderDiff
+      }
+
+      return left.title.localeCompare(right.title, 'nb')
     })
   })
 
   const nextIndex = {
-    cards,
-    cellNeedCardIdMap,
-    cellCollisionCountMap,
-    rowCardsMap,
+    allCards,
+    dayIndexes,
+    weekCellCardsMap,
   }
 
   scheduledIndexCache.set(state, nextIndex)
   return nextIndex
+}
+
+function getDayScheduledIndex(state: PlannerState, dayId: WeekdayId) {
+  return getScheduledIndex(state).dayIndexes.get(dayId) ?? createDayScheduledIndex()
+}
+
+function getRelevantCardIds(state: PlannerState, dayId?: WeekdayId) {
+  return state.needCardOrder.filter((cardId) => {
+    const card = state.needCards[cardId]
+
+    if (!card) {
+      return false
+    }
+
+    return dayId ? card.dayId === dayId : true
+  })
 }
 
 export function buildCellKey(rowId: string, timeBlockId: TimeBlockId) {
@@ -252,63 +372,73 @@ export function selectSubstituteById(
   return state.substitutes[substituteId] ?? null
 }
 
-export function selectScheduledNeedCards(state: PlannerState) {
-  return getScheduledIndex(state).cards
+export function selectScheduledNeedCards(state: PlannerState, dayId?: WeekdayId) {
+  return dayId ? getDayScheduledIndex(state, dayId).cards : getScheduledIndex(state).allCards
 }
 
-export function selectUnscheduledNeedCardIds(state: PlannerState) {
-  return state.needCardOrder.filter(
-    (cardId) => state.needCards[cardId]?.placement === 'unscheduled',
-  )
+export function selectUnscheduledNeedCardIds(state: PlannerState, dayId?: WeekdayId) {
+  return state.needCardOrder.filter((cardId) => {
+    const card = state.needCards[cardId]
+
+    if (!card || card.placement !== 'unscheduled') {
+      return false
+    }
+
+    return dayId ? card.dayId === dayId : true
+  })
 }
 
-export function selectCellNeedCardIdMap(state: PlannerState) {
-  return getScheduledIndex(state).cellNeedCardIdMap
+export function selectCellNeedCardIdMap(state: PlannerState, dayId: WeekdayId) {
+  return getDayScheduledIndex(state, dayId).cellNeedCardIdMap
 }
 
 export function selectNeedCardIdAtCell(
   state: PlannerState,
   rowId: string,
   timeBlockId: TimeBlockId,
+  dayId: WeekdayId,
 ) {
-  return getScheduledIndex(state).cellNeedCardIdMap.get(buildCellKey(rowId, timeBlockId)) ?? null
+  return getDayScheduledIndex(state, dayId).cellNeedCardIdMap.get(buildCellKey(rowId, timeBlockId)) ?? null
 }
 
-export function selectRowCards(state: PlannerState, rowId: string) {
-  return getScheduledIndex(state).rowCardsMap.get(rowId) ?? []
+export function selectRowCards(state: PlannerState, rowId: string, dayId: WeekdayId) {
+  return getDayScheduledIndex(state, dayId).rowCardsMap.get(rowId) ?? []
 }
 
-export function selectRowTeacherIds(state: PlannerState, rowId: string) {
-  const cached = getStateScopedMap(rowTeacherIdsCache, state).get(rowId)
+export function selectRowTeacherIds(state: PlannerState, rowId: string, dayId: WeekdayId) {
+  const cacheKey = getRowCacheKey(rowId, dayId)
+  const cached = getStateScopedMap(rowTeacherIdsCache, state).get(cacheKey)
 
   if (cached) {
     return cached
   }
 
-  const teacherIds = new Set(selectRowCards(state, rowId).map((card) => card.sourceTeacherId))
+  const teacherIds = new Set(selectRowCards(state, rowId, dayId).map((card) => card.sourceTeacherId))
   const nextTeacherIds = state.teacherOrder.filter((teacherId) => teacherIds.has(teacherId))
 
-  getStateScopedMap(rowTeacherIdsCache, state).set(rowId, nextTeacherIds)
+  getStateScopedMap(rowTeacherIdsCache, state).set(cacheKey, nextTeacherIds)
   return nextTeacherIds
 }
 
-export function selectRowTeachers(state: PlannerState, rowId: string) {
-  const cached = getStateScopedMap(rowTeachersCache, state).get(rowId)
+export function selectRowTeachers(state: PlannerState, rowId: string, dayId: WeekdayId) {
+  const cacheKey = getRowCacheKey(rowId, dayId)
+  const cached = getStateScopedMap(rowTeachersCache, state).get(cacheKey)
 
   if (cached) {
     return cached
   }
 
-  const nextTeachers = selectRowTeacherIds(state, rowId)
+  const nextTeachers = selectRowTeacherIds(state, rowId, dayId)
     .map((teacherId) => state.teachers[teacherId])
     .filter((teacher): teacher is Teacher => Boolean(teacher))
 
-  getStateScopedMap(rowTeachersCache, state).set(rowId, nextTeachers)
+  getStateScopedMap(rowTeachersCache, state).set(cacheKey, nextTeachers)
   return nextTeachers
 }
 
-export function selectRowTitle(state: PlannerState, rowId: string): RowTitle {
-  const cached = getStateScopedMap(rowTitleCache, state).get(rowId)
+export function selectRowTitle(state: PlannerState, rowId: string, dayId: WeekdayId): RowTitle {
+  const cacheKey = getRowCacheKey(rowId, dayId)
+  const cached = getStateScopedMap(rowTitleCache, state).get(cacheKey)
 
   if (cached) {
     return cached
@@ -321,35 +451,37 @@ export function selectRowTitle(state: PlannerState, rowId: string): RowTitle {
   }
 
   const responsible = selectSubstituteById(state, row.rowResponsibleId)
-  const teachers = selectRowTeachers(state, rowId)
+  const teachers = selectRowTeachers(state, rowId, dayId)
   const teacherFirstNames = teachers.map((teacher) => toFirstName(teacher.name))
 
   if (responsible) {
-    const responsibleFirstName = toFirstName(responsible.name)
-    const title = `${possessiveFirstName(responsibleFirstName)} vikartimer`
-
+    const title = `${possessiveFirstName(toFirstName(responsible.name))} vikartimer`
     const nextTitle = {
       full: title,
       compact: title,
     }
 
-    getStateScopedMap(rowTitleCache, state).set(rowId, nextTitle)
+    getStateScopedMap(rowTitleCache, state).set(cacheKey, nextTitle)
     return nextTitle
   }
 
   const title = formatTeacherTitle(teacherFirstNames)
-
   const nextTitle = {
     full: title,
     compact: title,
   }
 
-  getStateScopedMap(rowTitleCache, state).set(rowId, nextTitle)
+  getStateScopedMap(rowTitleCache, state).set(cacheKey, nextTitle)
   return nextTitle
 }
 
-export function selectRowDisplayModel(state: PlannerState, rowId: string): RowDisplayModel | null {
-  const cached = getStateScopedMap(rowDisplayModelCache, state).get(rowId)
+export function selectRowDisplayModel(
+  state: PlannerState,
+  rowId: string,
+  dayId: WeekdayId,
+): RowDisplayModel | null {
+  const cacheKey = getRowCacheKey(rowId, dayId)
+  const cached = getStateScopedMap(rowDisplayModelCache, state).get(cacheKey)
 
   if (cached !== undefined) {
     return cached
@@ -358,14 +490,14 @@ export function selectRowDisplayModel(state: PlannerState, rowId: string): RowDi
   const row = state.rows[rowId]
 
   if (!row) {
-    getStateScopedMap(rowDisplayModelCache, state).set(rowId, null)
+    getStateScopedMap(rowDisplayModelCache, state).set(cacheKey, null)
     return null
   }
 
-  const title = selectRowTitle(state, rowId)
+  const title = selectRowTitle(state, rowId, dayId)
   const responsible = selectSubstituteById(state, row.rowResponsibleId)
-  const teachers = selectRowTeachers(state, rowId)
-  const cardCount = selectRowCards(state, rowId).length
+  const teachers = selectRowTeachers(state, rowId, dayId)
+  const cardCount = selectRowCards(state, rowId, dayId).length
 
   const nextDisplayModel = {
     row,
@@ -381,7 +513,7 @@ export function selectRowDisplayModel(state: PlannerState, rowId: string): RowDi
     canClearResponsible: Boolean(responsible),
   }
 
-  getStateScopedMap(rowDisplayModelCache, state).set(rowId, nextDisplayModel)
+  getStateScopedMap(rowDisplayModelCache, state).set(cacheKey, nextDisplayModel)
   return nextDisplayModel
 }
 
@@ -454,7 +586,7 @@ export function selectNeedCardConflict(state: PlannerState, cardId: string) {
   }
 
   const collisionCount =
-    getScheduledIndex(state).cellCollisionCountMap.get(
+    getDayScheduledIndex(state, card.dayId).cellCollisionCountMap.get(
       buildCellKey(card.rowId, card.timeBlockId),
     ) ?? 0
 
@@ -534,24 +666,26 @@ export function selectCanDropNeedCardInCell(
   cardId: string,
   rowId: string,
   timeBlockId: TimeBlockId,
+  dayId: WeekdayId,
 ) {
   const card = state.needCards[cardId]
 
-  if (!card || card.allocatedTimeBlockId !== timeBlockId) {
+  if (!card || card.dayId !== dayId || card.allocatedTimeBlockId !== timeBlockId) {
     return false
   }
 
-  return selectCanPlaceNeedCardInCell(state, cardId, rowId, timeBlockId)
+  return selectCanPlaceNeedCardInCell(state, cardId, rowId, timeBlockId, dayId)
 }
 
 export function selectCanDropNeedCardInRow(
   state: PlannerState,
   cardId: string,
   rowId: string,
+  dayId: WeekdayId,
 ) {
   const card = state.needCards[cardId]
 
-  if (!card) {
+  if (!card || card.dayId !== dayId) {
     return false
   }
 
@@ -560,6 +694,7 @@ export function selectCanDropNeedCardInRow(
     cardId,
     rowId,
     card.allocatedTimeBlockId,
+    dayId,
   )
 }
 
@@ -568,15 +703,16 @@ export function selectCanPlaceNeedCardInCell(
   cardId: string,
   rowId: string,
   timeBlockId: TimeBlockId,
+  dayId: WeekdayId,
 ) {
   const card = state.needCards[cardId]
   const row = state.rows[rowId]
 
-  if (!card || !row) {
+  if (!card || !row || card.dayId !== dayId) {
     return false
   }
 
-  const occupyingCardId = selectNeedCardIdAtCell(state, rowId, timeBlockId)
+  const occupyingCardId = selectNeedCardIdAtCell(state, rowId, timeBlockId, dayId)
 
   return occupyingCardId === null || occupyingCardId === card.id
 }
@@ -585,28 +721,33 @@ export function selectRow(state: PlannerState, rowId: string): Row | null {
   return state.rows[rowId] ?? null
 }
 
-export function selectPlannerSummary(state: PlannerState): PlannerSummaryViewModel {
-  const cached = plannerSummaryCache.get(state)
+export function selectPlannerSummary(
+  state: PlannerState,
+  dayId?: WeekdayId,
+): PlannerSummaryViewModel {
+  const cacheKey = getSummaryKey(dayId)
+  const cached = getStateScopedMap(plannerSummaryCache, state).get(cacheKey)
 
   if (cached) {
     return cached
   }
 
-  const total = state.needCardOrder.length
-  const scheduled = selectScheduledNeedCards(state).length
-  const explicitlyAssigned = state.needCardOrder.filter(
+  const relevantCardIds = getRelevantCardIds(state, dayId)
+  const total = relevantCardIds.length
+  const scheduled = relevantCardIds.filter((cardId) => state.needCards[cardId]?.placement === 'scheduled').length
+  const explicitlyAssigned = relevantCardIds.filter(
     (cardId) => selectNeedCardAssignmentMode(state, cardId) === 'explicit',
   ).length
-  const inherited = state.needCardOrder.filter(
+  const inherited = relevantCardIds.filter(
     (cardId) => selectNeedCardAssignmentMode(state, cardId) === 'inherited',
   ).length
   const rowAssignments = state.rowOrder.filter(
     (rowId) => state.rows[rowId]?.rowResponsibleId !== null,
   ).length
-  const coveredCards = state.needCardOrder.filter(
+  const coveredCards = relevantCardIds.filter(
     (cardId) => selectEffectiveAssigneeId(state, cardId) !== null,
   ).length
-  const unassignedItems = state.needCardOrder
+  const unassignedItems = relevantCardIds
     .map((cardId) => {
       const card = state.needCards[cardId]
 
@@ -617,7 +758,7 @@ export function selectPlannerSummary(state: PlannerState): PlannerSummaryViewMod
       const teacher = selectTeacherById(state, card.sourceTeacherId)
       const rowTitle =
         card.placement === 'scheduled' && card.rowId
-          ? selectRowTitle(state, card.rowId).compact || UNKNOWN_ROW_TITLE
+          ? selectRowTitle(state, card.rowId, card.dayId).compact || UNKNOWN_ROW_TITLE
           : UNSCHEDULED_ROW_TITLE
 
       return {
@@ -663,16 +804,22 @@ export function selectPlannerSummary(state: PlannerState): PlannerSummaryViewMod
     unassignedItems,
   }
 
-  plannerSummaryCache.set(state, nextSummary)
+  getStateScopedMap(plannerSummaryCache, state).set(cacheKey, nextSummary)
   return nextSummary
 }
 
-export function selectSubstituteWorkloads(state: PlannerState): SubstituteWorkload[] {
-  const cached = substituteWorkloadCache.get(state)
+export function selectSubstituteWorkloads(
+  state: PlannerState,
+  dayId?: WeekdayId,
+): SubstituteWorkload[] {
+  const cacheKey = getSummaryKey(dayId)
+  const cached = getStateScopedMap(substituteWorkloadCache, state).get(cacheKey)
 
   if (cached) {
     return cached
   }
+
+  const relevantCardIds = getRelevantCardIds(state, dayId)
 
   const workloads = state.substituteOrder
     .map((substituteId) => {
@@ -680,10 +827,10 @@ export function selectSubstituteWorkloads(state: PlannerState): SubstituteWorklo
       const rowAssignments = state.rowOrder.filter(
         (rowId) => state.rows[rowId]?.rowResponsibleId === substituteId,
       ).length
-      const explicitOverrides = state.needCardOrder.filter(
+      const explicitOverrides = relevantCardIds.filter(
         (cardId) => state.needCards[cardId]?.explicitAssigneeId === substituteId,
       ).length
-      const effectiveCoverageCount = state.needCardOrder.filter(
+      const effectiveCoverageCount = relevantCardIds.filter(
         (cardId) => selectEffectiveAssigneeId(state, cardId) === substituteId,
       ).length
 
@@ -703,6 +850,58 @@ export function selectSubstituteWorkloads(state: PlannerState): SubstituteWorklo
       return left.substitute.name.localeCompare(right.substitute.name, 'nb')
     })
 
-  substituteWorkloadCache.set(state, workloads)
+  getStateScopedMap(substituteWorkloadCache, state).set(cacheKey, workloads)
   return workloads
+}
+
+export function selectWeekGridViewModel(state: PlannerState): WeekGridViewModel {
+  const cached = weekGridCache.get(state)
+
+  if (cached) {
+    return cached
+  }
+
+  const scheduledIndex = getScheduledIndex(state)
+
+  const nextViewModel = {
+    days: WEEKDAYS,
+    rows: TIME_BLOCKS.map((timeBlock) => ({
+      timeBlock,
+      cells: WEEKDAYS.map((day) => {
+        const scheduledCards =
+          scheduledIndex.weekCellCardsMap.get(buildWeekCellKey(day.id, timeBlock.id)) ?? []
+
+        return {
+          dayId: day.id,
+          timeBlockId: timeBlock.id,
+          cards: scheduledCards.map((card) => {
+            const displayModel = selectNeedCardDisplayModel(state, card.id)
+
+            return {
+              cardId: card.id,
+              dayId: card.dayId,
+              timeBlockId: card.timeBlockId,
+              rowId: card.rowId,
+              classLabel: displayModel?.classLabel ?? card.title,
+              subjectLabel: displayModel?.subjectLabel ?? card.title,
+              assigneeLabel: displayModel?.statusDetail ?? 'Ingen vikar',
+              teacherName: displayModel?.teacher?.name ?? UNKNOWN_TEACHER_NAME,
+              teacherAvatarInitials: displayModel?.teacher?.avatarInitials ?? '??',
+              teacherAccent: displayModel?.teacherAccent ?? card.accentColor,
+              assigneeAvatarInitials: displayModel?.statusAssignee?.avatarInitials ?? null,
+              assigneeAccent:
+                displayModel?.statusAssignee?.accentColor ??
+                displayModel?.assigneeAccent ??
+                NEUTRAL_ACCENT,
+              statusTone: displayModel?.statusTone ?? 'unassigned',
+              accentColor: displayModel?.assigneeAccent ?? displayModel?.rowAccent ?? NEUTRAL_ACCENT,
+            }
+          }),
+        }
+      }),
+    })),
+  } satisfies WeekGridViewModel
+
+  weekGridCache.set(state, nextViewModel)
+  return nextViewModel
 }

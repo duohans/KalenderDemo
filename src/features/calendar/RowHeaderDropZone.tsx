@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 
 import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
+import type { WeekdayId } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
@@ -15,11 +16,13 @@ import {
 
 type RowHeaderDropZoneProps = {
   rowId: string
+  dayId: WeekdayId
   activeDrag: PlannerDragItem | null
 }
 
 export function RowHeaderDropZone({
   rowId,
+  dayId,
   activeDrag,
 }: RowHeaderDropZoneProps) {
   const state = useScheduleState((plannerState) => plannerState)
@@ -32,11 +35,12 @@ export function RowHeaderDropZone({
     id: `row-header:${rowId}`,
     data: {
       type: 'row-header',
+      dayId,
       rowId,
     },
   })
 
-  const displayModel = selectRowDisplayModel(state, rowId)
+  const displayModel = selectRowDisplayModel(state, rowId, dayId)
 
   if (!displayModel) {
     return null
@@ -47,12 +51,13 @@ export function RowHeaderDropZone({
   const hiddenTeacherCount = Math.max(0, teachers.length - visibleTeachers.length)
   const canAcceptNeedCard =
     activeDrag?.type === 'need-card' &&
-    canDropOnTarget(state, activeDrag, { type: 'row-header', rowId })
+    canDropOnTarget(state, activeDrag, { type: 'row-header', dayId, rowId })
   const canAcceptSubstitute =
     activeDrag?.type === 'substitute' &&
-    canDropOnTarget(state, activeDrag, { type: 'row-header', rowId })
+    canDropOnTarget(state, activeDrag, { type: 'row-header', dayId, rowId })
   const canAcceptDrop = canAcceptNeedCard || canAcceptSubstitute
-  const isSelected = selection?.kind === 'row' && selection.rowId === rowId
+  const isSelected =
+    selection?.kind === 'row' && selection.rowId === rowId && selection.dayId === dayId
   const dropAriaLabel = canAcceptNeedCard
     ? `Plasser kort i ${title.full}`
     : `Tildel vikar til ${title.full}`
@@ -92,7 +97,7 @@ export function RowHeaderDropZone({
       <button
         type="button"
         className="row-header-button"
-        onClick={() => openSelection({ kind: 'row', rowId })}
+        onClick={() => openSelection({ kind: 'row', rowId, dayId })}
         aria-haspopup="dialog"
         aria-expanded={isSelected}
         aria-label={`Åpne detaljer for ${title.full}`}

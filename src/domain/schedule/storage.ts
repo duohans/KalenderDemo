@@ -14,7 +14,11 @@ export function migrateStoredPlannerState(value: unknown): PlannerState | null {
     return parsed.data
   }
 
-  if (!isRecord(value) || value.version !== 3 || !isRecord(value.needCards)) {
+  if (
+    !isRecord(value) ||
+    (value.version !== 3 && value.version !== 4) ||
+    !isRecord(value.needCards)
+  ) {
     return null
   }
 
@@ -29,12 +33,17 @@ export function migrateStoredPlannerState(value: unknown): PlannerState | null {
         typeof rawCard.timeBlockId === 'string'
           ? rawCard.timeBlockId
           : seedState.needCards[cardId]?.allocatedTimeBlockId
+      const dayId =
+        typeof rawCard.dayId === 'string'
+          ? rawCard.dayId
+          : 'monday'
 
       return [
         cardId,
-        allocatedTimeBlockId
+        allocatedTimeBlockId && dayId
           ? {
               ...rawCard,
+              dayId,
               allocatedTimeBlockId,
             }
           : rawCard,

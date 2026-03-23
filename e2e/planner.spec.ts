@@ -61,6 +61,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 10X',
     subtitle: 'Rom 410',
     sourceTeacherId: 'teacher-petter',
+    dayId: 'monday',
     allocatedTimeBlockId: '08:30',
     placement: 'unscheduled',
     rowId: null,
@@ -73,6 +74,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 11Z',
     subtitle: 'Rom 411',
     sourceTeacherId: 'teacher-line',
+    dayId: 'monday',
     allocatedTimeBlockId: '09:30',
     placement: 'unscheduled',
     rowId: null,
@@ -85,6 +87,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 12Y',
     subtitle: 'Rom 412',
     sourceTeacherId: 'teacher-camilla',
+    dayId: 'monday',
     allocatedTimeBlockId: '11:30',
     placement: 'unscheduled',
     rowId: null,
@@ -133,6 +136,48 @@ function createEmptyRowState() {
       timeBlockId: null,
     }
   })
+
+  return state
+}
+
+function createCrowdedWeekCellState() {
+  const state = createSeedPlannerState()
+
+  state.rows['row-2'] = {
+    id: 'row-2',
+    order: 1,
+    rowResponsibleId: null,
+  }
+  state.rows['row-3'] = {
+    id: 'row-3',
+    order: 2,
+    rowResponsibleId: null,
+  }
+  state.rows['row-4'] = {
+    id: 'row-4',
+    order: 3,
+    rowResponsibleId: null,
+  }
+  state.rowOrder = ['row-1', 'row-2', 'row-3', 'row-4']
+
+  state.needCards['card-samfunn-8c'] = {
+    ...state.needCards['card-samfunn-8c'],
+    placement: 'scheduled',
+    rowId: 'row-2',
+    timeBlockId: '08:30',
+  }
+  state.needCards['card-engelsk-7b'] = {
+    ...state.needCards['card-engelsk-7b'],
+    placement: 'scheduled',
+    rowId: 'row-3',
+    timeBlockId: '08:30',
+  }
+  state.needCards['card-norsk-9a'] = {
+    ...state.needCards['card-norsk-9a'],
+    placement: 'scheduled',
+    rowId: 'row-4',
+    timeBlockId: '08:30',
+  }
 
   return state
 }
@@ -186,6 +231,68 @@ test('renders the new-row placeholder without regular time slots', async ({ page
 
   const cellCount = await placeholder.locator('[data-testid^="calendar-cell-"]').count()
   expect(cellCount).toBe(0)
+})
+
+test('opens a planned lesson detail sheet inside week view and supports an explicit day-view jump', async ({
+  page,
+}) => {
+  await openFreshPlanner(page)
+
+  await page.getByRole('tab', { name: 'Uke' }).click()
+  await expect(page.getByRole('region', { name: 'Ukeoversikt' })).toBeVisible()
+
+  await page.getByRole('button', { name: /åpne detaljer for naturfag 7b/i }).click()
+
+  const dialog = page.getByRole('dialog')
+
+  await expect(page.getByRole('region', { name: 'Ukeoversikt' })).toBeVisible()
+  await expect(dialog).toContainText('Naturfag 7B')
+  await expect(dialog.getByRole('button', { name: /åpne i dagvisning/i })).toBeVisible()
+
+  await dialog.getByRole('button', { name: /åpne i dagvisning/i }).click()
+
+  await expect(page.getByRole('region', { name: 'Dagstavle' })).toBeVisible()
+  await expect(dialog).toContainText('Naturfag 7B')
+})
+
+test('lays out multiple week-view lessons side by side with equal widths and compact overflow', async ({
+  page,
+}) => {
+  await openPlannerWithState(page, createCrowdedWeekCellState())
+
+  await page.getByRole('tab', { name: 'Uke' }).click()
+
+  const mondayMorningCell = page.locator('.week-board__row-grid').first().locator('.week-board__cell').first()
+
+  await expect(mondayMorningCell.locator('.week-mini-card')).toHaveCount(3)
+  await expect(mondayMorningCell.locator('.week-mini-card__more')).toHaveText('+1')
+
+  const metrics = await mondayMorningCell.evaluate((cell) => {
+    const cards = Array.from(cell.querySelectorAll<HTMLElement>('.week-mini-card'))
+    const overflow = cell.querySelector<HTMLElement>('.week-mini-card__more')
+
+    if (cards.length !== 3 || !overflow) {
+      return null
+    }
+
+    const rects = cards.map((card) => card.getBoundingClientRect())
+    const tops = rects.map((rect) => rect.top)
+    const widths = rects.map((rect) => rect.width)
+
+    return {
+      horizontalOrder:
+        rects[0].left < rects[1].left && rects[1].left < rects[2].left,
+      sameRow: tops.every((top) => Math.abs(top - tops[0]) < 2),
+      equalWidths: widths.every((width) => Math.abs(width - widths[0]) < 2),
+      overflowIsCompact: overflow.getBoundingClientRect().width < widths[0],
+    }
+  })
+
+  expect(metrics).not.toBeNull()
+  expect(metrics?.horizontalOrder).toBe(true)
+  expect(metrics?.sameRow).toBe(true)
+  expect(metrics?.equalWidths).toBe(true)
+  expect(metrics?.overflowIsCompact).toBe(true)
 })
 
 test('rejects dragging a need card into the wrong time column', async ({ page }) => {

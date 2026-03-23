@@ -1,7 +1,7 @@
-import type { TimeBlock, TimeBlockId } from './types.ts'
+import type { TimeBlock, TimeBlockId, WeekdayId } from './types.ts'
 
 export const STORAGE_KEY = 'substitute-planner:v2'
-export const STORAGE_VERSION = 4
+export const STORAGE_VERSION = 5
 
 export const TIME_BLOCKS = [
   { id: '08:30', label: '08:30-09:30', start: '08:30', end: '09:30' },
@@ -13,6 +13,32 @@ export const TIME_BLOCKS = [
 ] as const satisfies readonly TimeBlock[]
 
 export const TIME_BLOCK_ID_SET = new Set<TimeBlockId>(TIME_BLOCKS.map((block) => block.id))
+
+export const WEEKDAYS = [
+  { id: 'monday', shortLabel: 'Man', label: 'Mandag' },
+  { id: 'tuesday', shortLabel: 'Tir', label: 'Tirsdag' },
+  { id: 'wednesday', shortLabel: 'Ons', label: 'Onsdag' },
+  { id: 'thursday', shortLabel: 'Tor', label: 'Torsdag' },
+  { id: 'friday', shortLabel: 'Fre', label: 'Fredag' },
+] as const satisfies readonly {
+  id: WeekdayId
+  shortLabel: string
+  label: string
+}[]
+
+export const WEEKDAY_ORDER = WEEKDAYS.reduce<Record<WeekdayId, number>>(
+  (accumulator, day, index) => {
+    accumulator[day.id] = index
+    return accumulator
+  },
+  {
+    monday: 0,
+    tuesday: 1,
+    wednesday: 2,
+    thursday: 3,
+    friday: 4,
+  },
+)
 
 export const TIME_BLOCK_ORDER = TIME_BLOCKS.reduce<Record<TimeBlockId, number>>(
   (accumulator, block, index) => {

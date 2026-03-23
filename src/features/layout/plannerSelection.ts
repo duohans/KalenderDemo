@@ -1,3 +1,5 @@
+import type { WeekdayId } from '../../domain/schedule/types.ts'
+
 export type PlannerSelection =
   | {
       kind: 'need-card'
@@ -6,6 +8,7 @@ export type PlannerSelection =
   | {
       kind: 'row'
       rowId: string
+      dayId: WeekdayId
     }
 
 export function isNeedCardSelection(
@@ -18,6 +21,7 @@ export function isNeedCardSelection(
 export function isRowSelection(
   selection: PlannerSelection | null,
   rowId: string,
+  dayId: WeekdayId,
 ) {
-  return selection?.kind === 'row' && selection.rowId === rowId
+  return selection?.kind === 'row' && selection.rowId === rowId && selection.dayId === dayId
 }

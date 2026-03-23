@@ -6,6 +6,13 @@ export type TimeBlockId =
   | '12:30'
   | '13:30'
 
+export type WeekdayId =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+
 export type Teacher = {
   id: string
   name: string
@@ -31,6 +38,7 @@ export type NeedCard = {
   title: string
   subtitle: string
   sourceTeacherId: string
+  dayId: WeekdayId
   allocatedTimeBlockId: TimeBlockId
   placement: 'unscheduled' | 'scheduled'
   rowId: string | null

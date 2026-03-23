@@ -1,4 +1,5 @@
 import {
+  CalendarDays,
   ChevronRight,
   Clock3,
   LayoutGrid,
@@ -22,7 +23,7 @@ import {
   selectSubstituteById,
   selectTeacherById,
 } from '../../domain/schedule/selectors.ts'
-import type { PlannerAction, PlannerState, TimeBlockId } from '../../domain/schedule/types.ts'
+import type { PlannerAction, PlannerState, TimeBlockId, WeekdayId } from '../../domain/schedule/types.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import {
   useScheduleDispatch,
@@ -100,11 +101,19 @@ function NeedCardDetailContent({
   const effectiveAssignee = selectEffectiveNeedCardAssignee(state, card.id)
   const assignmentMode = selectNeedCardAssignmentMode(state, card.id)
   const rowTitle =
-    card.placement === 'scheduled' && card.rowId ? selectRowTitle(state, card.rowId) : null
+    card.placement === 'scheduled' && card.rowId
+      ? selectRowTitle(state, card.rowId, card.dayId)
+      : null
   const isMovingToUnscheduled = selectedRowId === UNSCHEDULED_ROW_ID
   const selectedCellAvailable =
     !isMovingToUnscheduled &&
-    selectCanDropNeedCardInCell(state, card.id, selectedRowId, card.allocatedTimeBlockId)
+    selectCanDropNeedCardInCell(
+      state,
+      card.id,
+      selectedRowId,
+      card.allocatedTimeBlockId,
+      card.dayId,
+    )
   const placementChanged = isMovingToUnscheduled
     ? card.placement !== 'unscheduled'
     : card.placement !== 'scheduled' || card.rowId !== selectedRowId
@@ -113,7 +122,13 @@ function NeedCardDetailContent({
   const currentRowCanKeepCardAtNextTime =
     card.placement === 'scheduled' &&
     card.rowId !== null &&
-    selectCanPlaceNeedCardInCell(state, card.id, card.rowId, selectedAllocatedTimeBlockId)
+    selectCanPlaceNeedCardInCell(
+      state,
+      card.id,
+      card.rowId,
+      selectedAllocatedTimeBlockId,
+      card.dayId,
+    )
   const assigneeChanged = (card.explicitAssigneeId ?? '') !== selectedCardAssigneeId
   const canApplyAssignee =
     assigneeChanged && (selectedCardAssigneeId !== '' || card.explicitAssigneeId !== null)
@@ -238,7 +253,7 @@ function NeedCardDetailContent({
               <option value={UNSCHEDULED_ROW_ID}>Uplanlagt</option>
               {state.rowOrder.map((rowId) => (
                 <option key={rowId} value={rowId}>
-                  {selectRowTitle(state, rowId).compact}
+                  {selectRowTitle(state, rowId, card.dayId).compact}
                 </option>
               ))}
             </select>
@@ -379,12 +394,14 @@ function NeedCardDetailContent({
 function RowDetailContent({
   closeSelection,
   openSelection,
+  dayId,
   rowId,
   runAction,
   state,
 }: {
   closeSelection: () => void
   openSelection: (selection: { kind: 'need-card'; cardId: string }) => void
+  dayId: WeekdayId
   rowId: string
   runAction: (action: PlannerAction) => void
   state: PlannerState
@@ -396,10 +413,10 @@ function RowDetailContent({
     return null
   }
 
-  const rowDisplayModel = selectRowDisplayModel(state, row.id)
+  const rowDisplayModel = selectRowDisplayModel(state, row.id, dayId)
   const rowAssignee = selectSubstituteById(state, row.rowResponsibleId)
-  const rowCards = selectRowCards(state, row.id)
-  const rowTitle = selectRowTitle(state, row.id)
+  const rowCards = selectRowCards(state, row.id, dayId)
+  const rowTitle = selectRowTitle(state, row.id, dayId)
   const rowAssigneeChanged = (row.rowResponsibleId ?? '') !== selectedRowAssigneeId
   const canApplyRowAssignee =
     rowAssigneeChanged && (selectedRowAssigneeId !== '' || row.rowResponsibleId !== null)
@@ -546,7 +563,15 @@ function RowDetailContent({
   )
 }
 
-export function PlannerDetailSheet() {
+type PlannerDetailSheetProps = {
+  viewMode?: 'day' | 'week'
+  onOpenNeedCardInDayView?: (cardId: string) => void
+}
+
+export function PlannerDetailSheet({
+  viewMode = 'day',
+  onOpenNeedCardInDayView,
+}: PlannerDetailSheetProps) {
   const state = useScheduleState((plannerState) => plannerState)
   const selection = useScheduleSelection()
   const dispatch = useScheduleDispatch()
@@ -631,14 +656,19 @@ export function PlannerDetailSheet() {
 
   const title =
     selection?.kind === 'need-card'
-      ? state.needCards[selection.cardId]?.title ?? ''
+        ? state.needCards[selection.cardId]?.title ?? ''
       : selection?.kind === 'row'
-        ? selectRowTitle(state, selection.rowId).compact
+        ? selectRowTitle(state, selection.rowId, selection.dayId).compact
         : ''
 
   if (!selection) {
     return null
   }
+
+  const canOpenInDayView =
+    viewMode === 'week' &&
+    selection.kind === 'need-card' &&
+    typeof onOpenNeedCardInDayView === 'function'
 
   return (
     <>
@@ -663,14 +693,26 @@ export function PlannerDetailSheet() {
               {title}
             </h3>
           </div>
-          <button
-            type="button"
-            className="action-button action-button--secondary detail-sheet__close"
-            onClick={closeSelection}
-          >
-            <X size={14} strokeWidth={2.25} aria-hidden="true" />
-            Lukk
-          </button>
+          <div className="detail-sheet__topbar-actions">
+            {canOpenInDayView ? (
+              <button
+                type="button"
+                className="action-button action-button--outline detail-sheet__open-day"
+                onClick={() => onOpenNeedCardInDayView(selection.cardId)}
+              >
+                <CalendarDays size={14} strokeWidth={2.25} aria-hidden="true" />
+                Åpne i dagvisning
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="action-button action-button--secondary detail-sheet__close"
+              onClick={closeSelection}
+            >
+              <X size={14} strokeWidth={2.25} aria-hidden="true" />
+              Lukk
+            </button>
+          </div>
         </div>
         <div className="detail-sheet__stack">
           {selection.kind === 'need-card' ? (
@@ -685,6 +727,7 @@ export function PlannerDetailSheet() {
               key={selection.rowId}
               closeSelection={closeSelection}
               openSelection={openSelection}
+              dayId={selection.dayId}
               rowId={selection.rowId}
               runAction={runAction}
               state={state}

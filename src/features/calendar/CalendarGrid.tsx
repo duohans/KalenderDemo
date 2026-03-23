@@ -3,6 +3,7 @@ import { CalendarDays, Layers3 } from 'lucide-react'
 import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
 import { selectCellNeedCardIdMap } from '../../domain/schedule/selectors.ts'
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
+import type { WeekdayId } from '../../domain/schedule/types.ts'
 import { useScheduleState } from '../schedule/useSchedule.ts'
 import { NewRowPlaceholder } from './NewRowPlaceholder.tsx'
 import { RowLane } from './RowLane.tsx'
@@ -11,11 +12,12 @@ import { TimeHeader } from './TimeHeader.tsx'
 type CalendarGridProps = {
   activeDrag: PlannerDragItem | null
   dayLabel: string
+  selectedDayId: WeekdayId
 }
 
-export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
+export function CalendarGrid({ activeDrag, dayLabel, selectedDayId }: CalendarGridProps) {
   const rowOrder = useScheduleState((state) => state.rowOrder)
-  const cellNeedCardMap = useScheduleState((state) => selectCellNeedCardIdMap(state))
+  const cellNeedCardMap = useScheduleState((state) => selectCellNeedCardIdMap(state, selectedDayId))
   const rowCountLabel = `${rowOrder.length} ${rowOrder.length === 1 ? 'rad' : 'rader'}`
 
   return (
@@ -56,11 +58,12 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
                 <RowLane
                   key={rowId}
                   rowId={rowId}
+                  dayId={selectedDayId}
                   cellNeedCardMap={cellNeedCardMap}
                   activeDrag={activeDrag}
                 />
               ))}
-              <NewRowPlaceholder activeDrag={activeDrag} />
+              <NewRowPlaceholder activeDrag={activeDrag} dayId={selectedDayId} />
             </div>
           </div>
         </div>

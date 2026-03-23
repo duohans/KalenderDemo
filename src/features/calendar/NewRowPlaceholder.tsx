@@ -2,15 +2,17 @@ import { useDroppable } from '@dnd-kit/core'
 import { Plus } from 'lucide-react'
 
 import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd.ts'
+import type { WeekdayId } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
 import { usePlannerDragFeedback } from '../motion/PlannerDragFeedbackContext.tsx'
 import { useScheduleDispatch, useScheduleState } from '../schedule/useSchedule.ts'
 
 type NewRowPlaceholderProps = {
   activeDrag: PlannerDragItem | null
+  dayId: WeekdayId
 }
 
-export function NewRowPlaceholder({ activeDrag }: NewRowPlaceholderProps) {
+export function NewRowPlaceholder({ activeDrag, dayId }: NewRowPlaceholderProps) {
   const state = useScheduleState((plannerState) => plannerState)
   const dispatch = useScheduleDispatch()
   const { pushMotionEvent } = usePlannerDragFeedback()
@@ -18,12 +20,13 @@ export function NewRowPlaceholder({ activeDrag }: NewRowPlaceholderProps) {
     id: 'new-row-placeholder',
     data: {
       type: 'new-row-placeholder',
+      dayId,
     },
   })
 
   const canAcceptNeedCard =
     activeDrag?.type === 'need-card' &&
-    canDropOnTarget(state, activeDrag, { type: 'new-row-placeholder' })
+    canDropOnTarget(state, activeDrag, { type: 'new-row-placeholder', dayId })
   const isActiveDropTarget = Boolean(canAcceptNeedCard && isOver)
   const title = isActiveDropTarget ? 'Slipp for ny rad' : 'Ny rad'
   const copy = isActiveDropTarget

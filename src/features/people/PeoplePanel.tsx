@@ -1,6 +1,7 @@
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectSubstituteWorkloads } from '../../domain/schedule/selectors.ts'
 import { useEffect, useState } from 'react'
+import type { WeekdayId } from '../../domain/schedule/types.ts'
 import { useScheduleState } from '../schedule/useSchedule.ts'
 import { PanelFrame } from '../shared/PanelFrame.tsx'
 import { PersonCard } from '../shared/PersonCard.tsx'
@@ -8,12 +9,15 @@ import { SideRailPager } from '../shared/SideRailPager.tsx'
 
 type PeoplePanelProps = {
   activeDrag: PlannerDragItem | null
+  selectedDayId: WeekdayId
 }
 
 const PAGE_SIZE = 5
 
-export function PeoplePanel({ activeDrag }: PeoplePanelProps) {
-  const substituteWorkloads = useScheduleState(selectSubstituteWorkloads)
+export function PeoplePanel({ activeDrag, selectedDayId }: PeoplePanelProps) {
+  const substituteWorkloads = useScheduleState((state) =>
+    selectSubstituteWorkloads(state, selectedDayId),
+  )
   const totalPages = Math.max(1, Math.ceil(substituteWorkloads.length / PAGE_SIZE))
   const [currentPage, setCurrentPage] = useState(1)
   const visiblePage = Math.min(Math.max(currentPage, 1), totalPages)

@@ -11,13 +11,16 @@ import {
   selectRowDisplayModel,
   selectRowTitle,
   selectSubstituteWorkloads,
+  selectWeekGridViewModel,
 } from './selectors.ts'
 
 describe('schedule selectors', () => {
+  const dayId = 'monday' as const
+
   it('derives row titles from row responsibility and source teacher count', () => {
     const state = createSeedPlannerState()
 
-    expect(selectRowTitle(state, 'row-1')).toEqual({
+    expect(selectRowTitle(state, 'row-1', dayId)).toEqual({
       full: 'Kaspers vikartimer',
       compact: 'Kaspers vikartimer',
     })
@@ -33,7 +36,7 @@ describe('schedule selectors', () => {
       },
     }
 
-    expect(selectRowTitle(teacherDrivenState, 'row-1')).toEqual({
+    expect(selectRowTitle(teacherDrivenState, 'row-1', dayId)).toEqual({
       full: 'Camillas & Jespers timer',
       compact: 'Camillas & Jespers timer',
     })
@@ -47,6 +50,7 @@ describe('schedule selectors', () => {
           title: 'Historie 7A',
           subtitle: 'Rom 202',
           sourceTeacherId: 'teacher-jesper',
+          dayId,
           allocatedTimeBlockId: '08:30' as const,
           placement: 'scheduled' as const,
           rowId: 'row-1',
@@ -59,6 +63,7 @@ describe('schedule selectors', () => {
           title: 'Samfunn 7A',
           subtitle: 'Rom 203',
           sourceTeacherId: 'teacher-nora',
+          dayId,
           allocatedTimeBlockId: '13:30' as const,
           placement: 'scheduled' as const,
           rowId: 'row-1',
@@ -70,7 +75,7 @@ describe('schedule selectors', () => {
       needCardOrder: [...teacherDrivenState.needCardOrder, 'card-extra-jesper', 'card-extra-nora'],
     }
 
-    expect(selectRowTitle(threeTeacherState, 'row-1')).toEqual({
+    expect(selectRowTitle(threeTeacherState, 'row-1', dayId)).toEqual({
       full: 'Div timer',
       compact: 'Div timer',
     })
@@ -86,7 +91,7 @@ describe('schedule selectors', () => {
   it('builds compact row and card display models for the UI layer', () => {
     const state = createSeedPlannerState()
 
-    expect(selectRowDisplayModel(state, 'row-1')).toMatchObject({
+    expect(selectRowDisplayModel(state, 'row-1', dayId)).toMatchObject({
       rowAccent: '#ffd38b',
       secondaryLabel: '5 timer',
       title: {
@@ -150,9 +155,11 @@ describe('schedule selectors', () => {
   it('memoizes scheduled cell and row derivations for the same state object', () => {
     const state = createSeedPlannerState()
 
-    expect(selectCellNeedCardIdMap(state)).toBe(selectCellNeedCardIdMap(state))
-    expect(selectRowCards(state, 'row-1')).toBe(selectRowCards(state, 'row-1'))
-    expect(selectRowDisplayModel(state, 'row-1')).toBe(selectRowDisplayModel(state, 'row-1'))
+    expect(selectCellNeedCardIdMap(state, dayId)).toBe(selectCellNeedCardIdMap(state, dayId))
+    expect(selectRowCards(state, 'row-1', dayId)).toBe(selectRowCards(state, 'row-1', dayId))
+    expect(selectRowDisplayModel(state, 'row-1', dayId)).toBe(
+      selectRowDisplayModel(state, 'row-1', dayId),
+    )
     expect(selectNeedCardDisplayModel(state, 'card-naturfag-7b')).toBe(
       selectNeedCardDisplayModel(state, 'card-naturfag-7b'),
     )
@@ -204,5 +211,24 @@ describe('schedule selectors', () => {
       'sub-tarik',
       'sub-ida',
     ])
+  })
+
+  it('builds a weekday x time week grid overview', () => {
+    const state = createSeedPlannerState()
+    const weekGrid = selectWeekGridViewModel(state)
+    const mondayMorningCell = weekGrid.rows[0].cells[0]
+    const tuesdayMorningCell = weekGrid.rows[0].cells[1]
+
+    expect(weekGrid.days.map((day) => day.id)).toEqual([
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+    ])
+    expect(mondayMorningCell.cards.map((card) => card.cardId)).toEqual([
+      'card-matte-6a',
+    ])
+    expect(tuesdayMorningCell.cards).toEqual([])
   })
 })

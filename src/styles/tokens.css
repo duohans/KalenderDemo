@@ -41,6 +41,9 @@
   --planner-panel-card-width: 100%;
   --planner-row-header-width: 15rem;
   --planner-time-min-width: 9rem;
+  --week-time-width: 5.75rem;
+  --week-day-min-width: 10.5rem;
+  --week-cell-min-height: 8.2rem;
   --row-card-avatar-size: 2.18rem;
   --row-card-utility-size: 1.5rem;
   --row-card-empty-pill-size: 1.5rem;

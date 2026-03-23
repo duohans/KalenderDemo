@@ -8,6 +8,8 @@ import {
 } from './dnd.ts'
 
 describe('planner drag and drop rules', () => {
+  const dayId = 'monday' as const
+
   it('creates drag metadata that reflects a card placement', () => {
     const state = createSeedPlannerState()
 
@@ -22,6 +24,7 @@ describe('planner drag and drop rules', () => {
       cardId: 'card-norsk-6a',
       from: {
         type: 'calendar-cell',
+        dayId,
         rowId: 'row-1',
         timeBlockId: '09:30',
       },
@@ -35,6 +38,7 @@ describe('planner drag and drop rules', () => {
     expect(
       canDropOnTarget(state, dragItem, {
         type: 'calendar-cell',
+        dayId,
         rowId: 'row-1',
         timeBlockId: '08:30',
       }),
@@ -42,6 +46,7 @@ describe('planner drag and drop rules', () => {
     expect(
       resolveDrop(state, dragItem, {
         type: 'calendar-cell',
+        dayId,
         rowId: 'row-1',
         timeBlockId: '08:30',
       }),
@@ -55,6 +60,7 @@ describe('planner drag and drop rules', () => {
     expect(
       canDropOnTarget(state, dragItem, {
         type: 'calendar-cell',
+        dayId,
         rowId: 'row-1',
         timeBlockId: '09:30',
       }),
@@ -63,6 +69,7 @@ describe('planner drag and drop rules', () => {
     expect(
       resolveDrop(state, dragItem, {
         type: 'calendar-cell',
+        dayId,
         rowId: 'row-1',
         timeBlockId: '09:30',
       }),
@@ -76,7 +83,7 @@ describe('planner drag and drop rules', () => {
       resolveDrop(
         state,
         createNeedCardDragItem(state.needCards['card-krle-9a']),
-        { type: 'row-header', rowId: 'row-1' },
+        { type: 'row-header', dayId, rowId: 'row-1' },
       ),
     ).toEqual({
       type: 'moveNeedCardToCell',
@@ -93,7 +100,7 @@ describe('planner drag and drop rules', () => {
       resolveDrop(
         state,
         createNeedCardDragItem(state.needCards['card-samfunn-8c']),
-        { type: 'new-row-placeholder' },
+        { type: 'new-row-placeholder', dayId },
       ),
     ).toEqual({
       type: 'createRow',

@@ -36,6 +36,10 @@
     min-height: 0;
   }
 
+  .planner-shell__grid--week {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .planner-stage {
     height: 100%;
     min-width: 0;
@@ -62,6 +66,7 @@
   :root {
     --planner-row-header-width: 13.5rem;
     --planner-time-min-width: 8.25rem;
+    --week-day-min-width: 9.4rem;
   }
 }
 
@@ -81,6 +86,9 @@
   :root {
     --planner-row-header-width: 12rem;
     --planner-time-min-width: 7.6rem;
+    --week-time-width: 5.1rem;
+    --week-day-min-width: 8.5rem;
+    --week-cell-min-height: 7.4rem;
   }
 
   .planner-panel__body,

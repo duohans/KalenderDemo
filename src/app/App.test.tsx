@@ -14,6 +14,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 10X',
     subtitle: 'Rom 410',
     sourceTeacherId: 'teacher-petter',
+    dayId: 'monday',
     allocatedTimeBlockId: '08:30',
     placement: 'unscheduled',
     rowId: null,
@@ -26,6 +27,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 11Z',
     subtitle: 'Rom 411',
     sourceTeacherId: 'teacher-line',
+    dayId: 'monday',
     allocatedTimeBlockId: '09:30',
     placement: 'unscheduled',
     rowId: null,
@@ -38,6 +40,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 12Y',
     subtitle: 'Rom 412',
     sourceTeacherId: 'teacher-camilla',
+    dayId: 'monday',
     allocatedTimeBlockId: '11:30',
     placement: 'unscheduled',
     rowId: null,
@@ -194,6 +197,31 @@ describe('App', () => {
     expect(within(dialog).getByText('Kasper Dahl')).toBeInTheDocument()
     expect(within(dialog).getByText('Kunst og håndverk')).toBeInTheDocument()
     expect(within(dialog).getAllByText('Matematikk').length).toBeGreaterThan(0)
+  })
+
+  it('opens need-card details inside week view and supports an explicit jump to day view', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: 'Uke' }))
+
+    expect(screen.getByRole('region', { name: 'Ukeoversikt' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /åpne detaljer for naturfag 7b/i }))
+
+    const dialog = screen.getByRole('dialog')
+
+    expect(screen.getByRole('region', { name: 'Ukeoversikt' })).toBeInTheDocument()
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText('Naturfag 7B')).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: /åpne i dagvisning/i }),
+    ).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: /åpne i dagvisning/i }))
+
+    expect(screen.getByRole('region', { name: 'Dagstavle' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('clears a row assignee inline without opening the detail sheet', async () => {

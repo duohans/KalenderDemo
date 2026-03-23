@@ -1,7 +1,8 @@
-import type { NeedCard, PlannerAction, PlannerState, TimeBlockId } from './types.ts'
+import type { NeedCard, PlannerAction, PlannerState, TimeBlockId, WeekdayId } from './types.ts'
 
 function findNeedCardAtCell(
   state: PlannerState,
+  dayId: WeekdayId,
   rowId: string,
   timeBlockId: TimeBlockId,
   excludedCardId?: string,
@@ -10,6 +11,7 @@ function findNeedCardAtCell(
     if (
       card.id === excludedCardId ||
       card.placement !== 'scheduled' ||
+      card.dayId !== dayId ||
       card.rowId !== rowId
     ) {
       return false
@@ -48,7 +50,13 @@ function revalidateNeedCardPlacement(
     }
   }
 
-  const occupyingCard = findNeedCardAtCell(state, card.rowId, timeBlockId, card.id)
+  const occupyingCard = findNeedCardAtCell(
+    state,
+    card.dayId,
+    card.rowId,
+    timeBlockId,
+    card.id,
+  )
   const revalidatedCard: NeedCard = occupyingCard
     ? unscheduledCard
     : {
@@ -219,6 +227,7 @@ export function plannerReducer(state: PlannerState, action: PlannerAction): Plan
 
       const occupyingCard = findNeedCardAtCell(
         state,
+        card.dayId,
         action.rowId,
         action.timeBlockId,
         card.id,

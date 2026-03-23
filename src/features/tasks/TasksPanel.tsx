@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 import { type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectUnscheduledNeedCardIds } from '../../domain/schedule/selectors.ts'
+import type { WeekdayId } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
 import {
   useScheduleState,
@@ -14,13 +15,14 @@ import { TaskCard } from '../shared/TaskCard.tsx'
 
 type TasksPanelProps = {
   activeDrag: PlannerDragItem | null
+  selectedDayId: WeekdayId
 }
 
 const PAGE_SIZE = 5
 
-export function TasksPanel({ activeDrag }: TasksPanelProps) {
+export function TasksPanel({ activeDrag, selectedDayId }: TasksPanelProps) {
   const state = useScheduleState((plannerState) => plannerState)
-  const cardIds = selectUnscheduledNeedCardIds(state)
+  const cardIds = selectUnscheduledNeedCardIds(state, selectedDayId)
   const isEmpty = cardIds.length === 0
   const totalPages = Math.max(1, Math.ceil(cardIds.length / PAGE_SIZE))
   const [currentPage, setCurrentPage] = useState(1)

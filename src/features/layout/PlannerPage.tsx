@@ -17,8 +17,10 @@ import {
   resolveDrop,
   type PlannerDragItem,
 } from '../../domain/schedule/dnd.ts'
+import { WEEKDAYS } from '../../domain/schedule/constants.ts'
 import { selectPlannerSummary } from '../../domain/schedule/selectors.ts'
-import type { PlannerAction } from '../../domain/schedule/types.ts'
+import type { PlannerAction, WeekdayId } from '../../domain/schedule/types.ts'
+import { cx } from '../../lib/cx.ts'
 import {
   PlannerDragFeedbackProvider,
   type PlannerMotionEvent,
@@ -34,6 +36,7 @@ import { CalendarGrid } from '../calendar/CalendarGrid.tsx'
 import { PeoplePanel } from '../people/PeoplePanel.tsx'
 import { DragOverlayCard } from '../shared/DragOverlayCard.tsx'
 import { TasksPanel } from '../tasks/TasksPanel.tsx'
+import { WeekView } from '../week/WeekView.tsx'
 import { PlannerDetailSheet } from './PlannerDetailSheet.tsx'
 
 function isEditableTarget(target: EventTarget | null) {
@@ -92,11 +95,13 @@ function describeRejectedDrag(rejectedDrag: RejectedDrag | null) {
 
 export function PlannerPage() {
   const { state, dispatch } = useSchedule()
-  const { closeSelection } = useScheduleSelectionActions()
+  const { closeSelection, openSelection } = useScheduleSelectionActions()
   const { canRedo, canUndo, redo, undo } = useScheduleHistoryActions()
   const [activeDrag, setActiveDrag] = useState<PlannerDragItem | null>(null)
   const [overlaySize, setOverlaySize] = useState<{ width: number; height: number } | null>(null)
   const [manualAnnouncement, setManualAnnouncement] = useState('')
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day')
+  const [selectedDayId, setSelectedDayId] = useState<WeekdayId>('monday')
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -110,17 +115,12 @@ export function PlannerPage() {
   } = useDragFeedbackTimers()
   const shortcutModifier =
     typeof navigator !== 'undefined' && navigator.platform.includes('Mac') ? 'Cmd' : 'Ctrl'
-  const plannerSummary = selectPlannerSummary(state)
+  const plannerSummary = selectPlannerSummary(state, viewMode === 'day' ? selectedDayId : undefined)
   const coveragePercent = Math.round(plannerSummary.coverageRate * 100)
-  const dayLabel = useMemo(() => {
-    const formatted = new Intl.DateTimeFormat('nb-NO', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    }).format(new Date())
-
-    return formatted.charAt(0).toUpperCase() + formatted.slice(1)
-  }, [])
+  const dayLabel = useMemo(
+    () => WEEKDAYS.find((day) => day.id === selectedDayId)?.label ?? 'Mandag',
+    [selectedDayId],
+  )
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -162,6 +162,28 @@ export function PlannerPage() {
   const handleAction = (action: PlannerAction) => {
     pushMotionEvent(action)
     dispatch(action)
+  }
+
+  const openDayView = (dayId: WeekdayId) => {
+    closeSelection()
+    setSelectedDayId(dayId)
+    setViewMode('day')
+  }
+
+  const openNeedCardFromWeekView = (dayId: WeekdayId, cardId: string) => {
+    setSelectedDayId(dayId)
+    openSelection({ kind: 'need-card', cardId })
+  }
+
+  const openNeedCardInDayView = (cardId: string) => {
+    const card = state.needCards[cardId]
+
+    if (!card) {
+      return
+    }
+
+    setSelectedDayId(card.dayId)
+    setViewMode('day')
   }
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -236,6 +258,35 @@ export function PlannerPage() {
               </span>
             </div>
             <div className="planner-shell__actions">
+              <div className="planner-view-toggle" role="tablist" aria-label="Visning">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'day'}
+                  className={cx(
+                    'planner-view-toggle__button',
+                    viewMode === 'day' && 'planner-view-toggle__button--active',
+                  )}
+                  onClick={() => setViewMode('day')}
+                >
+                  Dag
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'week'}
+                  className={cx(
+                    'planner-view-toggle__button',
+                    viewMode === 'week' && 'planner-view-toggle__button--active',
+                  )}
+                  onClick={() => {
+                    closeSelection()
+                    setViewMode('week')
+                  }}
+                >
+                  Uke
+                </button>
+              </div>
               <button
                 type="button"
                 className="action-button action-button--secondary"
@@ -268,13 +319,35 @@ export function PlannerPage() {
             </div>
           </header>
 
-          <div className="planner-shell__grid">
-            <TasksPanel activeDrag={activeDrag} />
-            <CalendarGrid activeDrag={activeDrag} dayLabel={dayLabel} />
-            <PeoplePanel activeDrag={activeDrag} />
+          <div
+            className={cx(
+              'planner-shell__grid',
+              viewMode === 'week' && 'planner-shell__grid--week',
+            )}
+          >
+            {viewMode === 'day' ? (
+              <>
+                <TasksPanel activeDrag={activeDrag} selectedDayId={selectedDayId} />
+                <CalendarGrid
+                  activeDrag={activeDrag}
+                  dayLabel={dayLabel}
+                  selectedDayId={selectedDayId}
+                />
+                <PeoplePanel activeDrag={activeDrag} selectedDayId={selectedDayId} />
+              </>
+            ) : (
+              <WeekView
+                selectedDayId={selectedDayId}
+                onOpenDay={(dayId) => openDayView(dayId)}
+                onOpenCard={openNeedCardFromWeekView}
+              />
+            )}
           </div>
 
-          <PlannerDetailSheet />
+          <PlannerDetailSheet
+            viewMode={viewMode}
+            onOpenNeedCardInDayView={openNeedCardInDayView}
+          />
           <div className="sr-only" aria-live="polite" aria-atomic="true">
             {announcement}
           </div>

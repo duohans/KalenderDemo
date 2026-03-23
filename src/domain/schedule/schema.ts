@@ -8,11 +8,17 @@ import type {
   Substitute,
   Teacher,
   TimeBlockId,
+  WeekdayId,
 } from './types.ts'
 
 const timeBlockIdValues = TIME_BLOCKS.map((block) => block.id) as [
   TimeBlockId,
   ...TimeBlockId[],
+]
+
+const weekdayValues = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as [
+  WeekdayId,
+  ...WeekdayId[],
 ]
 
 function ensureOrderedRecords(
@@ -33,6 +39,7 @@ function ensureOrderedRecords(
 }
 
 export const timeBlockIdSchema = z.enum(timeBlockIdValues)
+export const weekdayIdSchema = z.enum(weekdayValues)
 
 export const teacherSchema = z.object({
   id: z.string().min(1),
@@ -59,6 +66,7 @@ const needCardBaseSchema = z.object({
   title: z.string(),
   subtitle: z.string(),
   sourceTeacherId: z.string().min(1),
+  dayId: weekdayIdSchema,
   allocatedTimeBlockId: timeBlockIdSchema,
   explicitAssigneeId: z.string().min(1).nullable(),
   accentColor: z.string().min(1),

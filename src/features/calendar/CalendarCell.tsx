@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 
 import { canDropOnTarget, type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectRowDisplayModel } from '../../domain/schedule/selectors.ts'
-import type { TimeBlockId } from '../../domain/schedule/types.ts'
+import type { TimeBlockId, WeekdayId } from '../../domain/schedule/types.ts'
 import { cx } from '../../lib/cx.ts'
 import {
   useScheduleState,
@@ -13,6 +13,7 @@ import { EmptyCellState } from './EmptyCellState.tsx'
 
 type CalendarCellProps = {
   rowId: string
+  dayId: WeekdayId
   timeBlockId: TimeBlockId
   cardId: string | null
   activeDrag: PlannerDragItem | null
@@ -20,16 +21,18 @@ type CalendarCellProps = {
 
 export function CalendarCell({
   rowId,
+  dayId,
   timeBlockId,
   cardId,
   activeDrag,
 }: CalendarCellProps) {
   const state = useScheduleState((plannerState) => plannerState)
-  const rowDisplayModel = selectRowDisplayModel(state, rowId)
+  const rowDisplayModel = selectRowDisplayModel(state, rowId, dayId)
   const { isOver, setNodeRef } = useDroppable({
     id: `calendar-cell:${rowId}:${timeBlockId}`,
     data: {
       type: 'calendar-cell',
+      dayId,
       rowId,
       timeBlockId,
     },
@@ -40,6 +43,7 @@ export function CalendarCell({
     isNeedCardDragActive &&
     canDropOnTarget(state, activeDrag, {
       type: 'calendar-cell',
+      dayId,
       rowId,
       timeBlockId,
     })
