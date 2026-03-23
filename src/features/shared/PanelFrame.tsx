@@ -1,5 +1,5 @@
 import { CircleHelp } from 'lucide-react'
-import type { PropsWithChildren } from 'react'
+import type { PropsWithChildren, ReactNode } from 'react'
 
 import { cx } from '../../lib/cx.ts'
 
@@ -9,6 +9,7 @@ type PanelFrameProps = PropsWithChildren<{
   tooltip?: string
   ariaLabel?: string
   showHeader?: boolean
+  footer?: ReactNode
   className?: string
 }>
 
@@ -18,6 +19,7 @@ export function PanelFrame({
   tooltip,
   ariaLabel,
   showHeader = true,
+  footer,
   className,
   children,
 }: PanelFrameProps) {
@@ -54,6 +56,7 @@ export function PanelFrame({
         </header>
       ) : null}
       <div className="planner-panel__body">{children}</div>
+      {footer ? <div className="planner-panel__footer">{footer}</div> : null}
     </section>
   )
 }

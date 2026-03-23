@@ -1,5 +1,9 @@
 /* Responsive */
 @media (min-width: 960px) {
+  :root {
+    --planner-panel-card-width: 15rem;
+  }
+
   .planner-shell__hero {
     flex-direction: row;
     align-items: center;
@@ -17,18 +21,40 @@
 }
 
 @media (min-width: 1280px) {
+  .planner-shell {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
   .planner-shell__grid {
-    grid-template-columns: minmax(12rem, var(--planner-side-width)) minmax(0, 1fr) minmax(12rem, var(--planner-side-width));
+    overflow: hidden;
+    grid-template-columns:
+      minmax(14rem, var(--planner-tasks-width))
+      minmax(0, 1fr)
+      minmax(13.5rem, var(--planner-people-width));
+    grid-template-rows: minmax(0, 1fr);
     min-height: 0;
   }
 
   .planner-stage {
+    height: 100%;
     min-width: 0;
     min-height: 0;
+    overflow: hidden;
   }
 
   .planner-sidebar {
+    height: 100%;
     min-height: 0;
+    overflow: hidden;
+  }
+
+  .planner-sidebar--tasks {
+    min-width: var(--planner-tasks-width);
+  }
+
+  .planner-sidebar--people {
+    min-width: var(--planner-people-width);
   }
 }
 
@@ -41,6 +67,12 @@
 
 @media (max-width: 959px) {
   .planner-stage__header {
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-direction: column;
+  }
+
+  .planner-stage__chips {
     justify-content: flex-start;
   }
 }

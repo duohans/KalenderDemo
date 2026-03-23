@@ -100,7 +100,11 @@ export function TaskCard({
         transform: CSS.Translate.toString(transform),
         touchAction: 'none',
       }}
-      className={cx('need-card-host min-h-0', variant === 'grid' && 'need-card-host--grid')}
+      className={cx(
+        'need-card-host min-h-0',
+        variant === 'grid' && 'need-card-host--grid',
+        variant === 'panel' && 'need-card-host--panel',
+      )}
     >
       <div
         aria-haspopup="dialog"
@@ -154,7 +158,11 @@ export function TaskCard({
           openSelection({ kind: 'need-card', cardId: card.id })
         }}
         aria-label={`Kort ${card.title}`}
-        className={cx('min-h-0', variant === 'grid' && 'need-card-frame--grid')}
+        className={cx(
+          'min-h-0 w-full',
+          variant === 'grid' && 'need-card-frame--grid',
+          variant === 'panel' && 'need-card-frame--panel',
+        )}
         {...listeners}
         {...attributes}
       >

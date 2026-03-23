@@ -23,7 +23,10 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
     >
       <div className="planner-grid-frame relative flex min-h-0 flex-1 flex-col">
         <div className="planner-stage__header">
-          <h2 className="sr-only">Dagstavle</h2>
+          <div className="planner-stage__heading">
+            <p className="panel-kicker">Planbord</p>
+            <h2 className="planner-stage__title planner-heading">Dagstavle</h2>
+          </div>
           <div className="planner-stage__chips">
             <span className="planner-chip planner-chip--board">
               <CalendarDays size={15} strokeWidth={2.1} aria-hidden="true" />

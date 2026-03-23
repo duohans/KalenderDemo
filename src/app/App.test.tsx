@@ -1,9 +1,65 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { createSeedPlannerState } from '../domain/schedule/seed.ts'
 import { resetPlannerStore } from '../store/plannerStore.ts'
 import App from './App.tsx'
+
+function createMultiPageRailState() {
+  const state = createSeedPlannerState()
+
+  state.needCards['card-ekstra-10x'] = {
+    id: 'card-ekstra-10x',
+    title: 'Ekstrafag 10X',
+    subtitle: 'Rom 410',
+    sourceTeacherId: 'teacher-petter',
+    placement: 'unscheduled',
+    rowId: null,
+    timeBlockId: null,
+    explicitAssigneeId: null,
+    accentColor: '#d9d6ff',
+  }
+  state.needCards['card-ekstra-11z'] = {
+    id: 'card-ekstra-11z',
+    title: 'Ekstrafag 11Z',
+    subtitle: 'Rom 411',
+    sourceTeacherId: 'teacher-line',
+    placement: 'unscheduled',
+    rowId: null,
+    timeBlockId: null,
+    explicitAssigneeId: null,
+    accentColor: '#ffd9c2',
+  }
+  state.needCards['card-ekstra-12y'] = {
+    id: 'card-ekstra-12y',
+    title: 'Ekstrafag 12Y',
+    subtitle: 'Rom 412',
+    sourceTeacherId: 'teacher-camilla',
+    placement: 'unscheduled',
+    rowId: null,
+    timeBlockId: null,
+    explicitAssigneeId: null,
+    accentColor: '#d7f0c8',
+  }
+  state.needCardOrder.push('card-ekstra-10x', 'card-ekstra-11z', 'card-ekstra-12y')
+
+  state.substitutes['sub-aagot'] = {
+    id: 'sub-aagot',
+    name: 'Ågot Øie',
+    avatarInitials: 'ÅØ',
+    accentColor: '#f2d0c3',
+  }
+  state.substitutes['sub-orjan'] = {
+    id: 'sub-orjan',
+    name: 'Ørjan Vik',
+    avatarInitials: 'ØV',
+    accentColor: '#cfe6ff',
+  }
+  state.substituteOrder.push('sub-aagot', 'sub-orjan')
+
+  return state
+}
 
 afterEach(() => {
   cleanup()
@@ -15,9 +71,12 @@ describe('App', () => {
   it('renders a compact planner shell with controls and work regions', () => {
     render(<App />)
 
-    expect(screen.getByRole('region', { name: 'Uplanlagt' })).toBeInTheDocument()
+    const tasksPanel = screen.getByRole('region', { name: 'Uplanlagt' })
+    const peoplePanel = screen.getByRole('region', { name: 'Vikarer' })
+
+    expect(tasksPanel).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Dagstavle' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Vikarer' })).toBeInTheDocument()
+    expect(peoplePanel).toBeInTheDocument()
     expect(screen.getByText('6 udekket')).toBeInTheDocument()
     expect(screen.getByText('50% dekning')).toBeInTheDocument()
     expect(screen.getByText('5 vikarer')).toBeInTheDocument()
@@ -32,9 +91,64 @@ describe('App', () => {
       ),
     ).not.toBeInTheDocument()
     expect(screen.queryByText('Planoversikt')).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Uplanlagt' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Vikarer' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Uplanlagt' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Dagstavle' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Vikarer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })).toBeInTheDocument()
+    expect(within(tasksPanel).getByText('1 / 1')).toBeInTheDocument()
+    expect(within(peoplePanel).getByText('1 / 1')).toBeInTheDocument()
+
+    const rowButton = screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })
+    const rowTitle = rowButton.querySelector('.row-header__title')
+
+    expect(rowTitle).not.toBeNull()
+    expect(rowTitle).not.toHaveClass('planner-heading')
+  })
+
+  it('pages both side rails in groups of five', async () => {
+    const user = userEvent.setup()
+
+    resetPlannerStore(createMultiPageRailState())
+    render(<App />)
+
+    const tasksPanel = screen.getByRole('region', { name: 'Uplanlagt' })
+    const peoplePanel = screen.getByRole('region', { name: 'Vikarer' })
+
+    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(5)
+    expect(within(peoplePanel).getAllByLabelText(/^vikar /i)).toHaveLength(5)
+    expect(within(tasksPanel).getByText('1 / 2')).toBeInTheDocument()
+    expect(within(peoplePanel).getByText('1 / 2')).toBeInTheDocument()
+    expect(within(tasksPanel).queryByLabelText(/kort ekstrafag 11z/i)).not.toBeInTheDocument()
+    expect(within(peoplePanel).queryByLabelText(/vikar ågot øie/i)).not.toBeInTheDocument()
+
+    await user.click(within(tasksPanel).getByRole('button', { name: /neste side i uplanlagt/i }))
+    await user.click(within(peoplePanel).getByRole('button', { name: /neste side i vikarer/i }))
+
+    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(2)
+    expect(within(peoplePanel).getAllByLabelText(/^vikar /i)).toHaveLength(2)
+    expect(within(tasksPanel).getByLabelText(/kort ekstrafag 11z/i)).toBeInTheDocument()
+    expect(within(peoplePanel).getByLabelText(/vikar ågot øie/i)).toBeInTheDocument()
+    expect(within(tasksPanel).getByText('2 / 2')).toBeInTheDocument()
+    expect(within(peoplePanel).getByText('2 / 2')).toBeInTheDocument()
+  })
+
+  it('clamps the current page when a side rail shrinks back to one page', async () => {
+    const user = userEvent.setup()
+
+    resetPlannerStore(createMultiPageRailState())
+    render(<App />)
+
+    const tasksPanel = screen.getByRole('region', { name: 'Uplanlagt' })
+
+    await user.click(within(tasksPanel).getByRole('button', { name: /neste side i uplanlagt/i }))
+    expect(within(tasksPanel).getByText('2 / 2')).toBeInTheDocument()
+
+    act(() => {
+      resetPlannerStore(createSeedPlannerState())
+    })
+
+    expect(within(tasksPanel).getByText('1 / 1')).toBeInTheDocument()
+    expect(within(tasksPanel).queryByLabelText(/kort ekstrafag 11z/i)).not.toBeInTheDocument()
   })
 
   it('opens need card details with source teacher and assignment explanation', async () => {

@@ -105,7 +105,7 @@ export function RowHeaderDropZone({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="row-header__title planner-heading" title={title.full}>
+            <h3 className="row-header__title" title={title.full}>
               {title.compact}
             </h3>
           </div>

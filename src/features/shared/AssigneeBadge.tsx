@@ -112,8 +112,8 @@ export function AssigneeBadge({
         ) : null}
       </span>
       {isStatus ? (
-        <span className="assignee-badge__copy min-w-0 leading-none">
-          <span className="assignee-badge__label">{label}</span>
+        <span className="assignee-badge__copy min-w-0">
+          {showLabel ? <span className="assignee-badge__label">{label}</span> : null}
           {detail ? <span className="assignee-badge__detail">{detail}</span> : null}
         </span>
       ) : !isCompact || showName || showLabel ? (
