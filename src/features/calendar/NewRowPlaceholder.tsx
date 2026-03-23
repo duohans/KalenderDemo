@@ -10,9 +10,14 @@ import { useScheduleDispatch, useScheduleState } from '../schedule/useSchedule.t
 type NewRowPlaceholderProps = {
   activeDrag: PlannerDragItem | null
   dayId: WeekdayId
+  variant?: 'lane' | 'header'
 }
 
-export function NewRowPlaceholder({ activeDrag, dayId }: NewRowPlaceholderProps) {
+export function NewRowPlaceholder({
+  activeDrag,
+  dayId,
+  variant = 'lane',
+}: NewRowPlaceholderProps) {
   const state = useScheduleState((plannerState) => plannerState)
   const dispatch = useScheduleDispatch()
   const { pushMotionEvent } = usePlannerDragFeedback()
@@ -39,6 +44,7 @@ export function NewRowPlaceholder({ activeDrag, dayId }: NewRowPlaceholderProps)
       data-testid="new-row-placeholder"
       className={cx(
         'new-row-placeholder',
+        variant === 'header' && 'new-row-placeholder--header',
         canAcceptNeedCard && 'drop-target-ready',
         isActiveDropTarget && 'drop-target-valid',
       )}
@@ -46,7 +52,10 @@ export function NewRowPlaceholder({ activeDrag, dayId }: NewRowPlaceholderProps)
     >
       <button
         type="button"
-        className="new-row-placeholder__button"
+        className={cx(
+          'new-row-placeholder__button',
+          variant === 'header' && 'new-row-placeholder__button--header',
+        )}
         aria-label="Opprett ny rad"
         onClick={() => {
           const action = { type: 'createRow' } as const

@@ -36,7 +36,6 @@ export function PanelFrame({
         <header className="planner-panel__header">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="panel-kicker">{title}</p>
               <h2 className="planner-heading planner-panel__title">{title}</h2>
               {subtitle ? (
                 <p className="planner-panel__subtitle">{subtitle}</p>

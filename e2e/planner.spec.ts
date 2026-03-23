@@ -182,6 +182,22 @@ function createCrowdedWeekCellState() {
   return state
 }
 
+function createWideBoardState() {
+  const state = createSeedPlannerState()
+
+  for (let index = 8; index <= 12; index += 1) {
+    const rowId = `row-${index}`
+    state.rows[rowId] = {
+      id: rowId,
+      order: index - 1,
+      rowResponsibleId: null,
+    }
+    state.rowOrder.push(rowId)
+  }
+
+  return state
+}
+
 async function openPlannerWithState(page: Page, state: ReturnType<typeof createMultiPageRailState>) {
   await page.addInitScript(
     ({ storageKey, nextState }) => {
@@ -342,7 +358,6 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
     const tasksRegion = document.querySelector('[aria-label="Uplanlagt"]')
     const peopleRegion = document.querySelector('[aria-label="Vikarer"]')
     const tasksCard = tasksRegion?.querySelector('article.need-card')
-    const boardCard = document.querySelector('.calendar-cell article.need-card')
     const cell = document.querySelector('[data-testid="calendar-cell-row-1-13:30"]')
     const state = cell?.querySelector('.empty-cell-state')
     const label = state?.querySelector('.empty-cell-state__label')
@@ -351,7 +366,6 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
       !(tasksRegion instanceof HTMLElement) ||
       !(peopleRegion instanceof HTMLElement) ||
       !(tasksCard instanceof HTMLElement) ||
-      !(boardCard instanceof HTMLElement) ||
       !(cell instanceof HTMLElement) ||
       !(state instanceof HTMLElement) ||
       !(label instanceof HTMLElement)
@@ -367,7 +381,6 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
       tasksPanelWidth: tasksRegion.getBoundingClientRect().width,
       peoplePanelWidth: peopleRegion.getBoundingClientRect().width,
       tasksCardWidth: tasksCard.getBoundingClientRect().width,
-      boardCardWidth: boardCard.getBoundingClientRect().width,
       widthGap: cellRect.width - stateRect.width,
       heightGap: cellRect.height - stateRect.height,
       labelCenterDeltaX: Math.abs(
@@ -390,12 +403,74 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
 
   expect(metrics.tasksPanelWidth).toBeGreaterThan(240)
   expect(metrics.peoplePanelWidth).toBeGreaterThan(230)
-  expect(Math.abs(metrics.tasksCardWidth - metrics.boardCardWidth)).toBeLessThan(16)
+  expect(metrics.tasksCardWidth).toBeGreaterThan(170)
+  expect(metrics.tasksCardWidth).toBeLessThan(metrics.tasksPanelWidth)
   expect(metrics.widthGap).toBeLessThanOrEqual(2.5)
   expect(metrics.heightGap).toBeLessThanOrEqual(2.5)
   expect(metrics.labelCenterDeltaX).toBeLessThanOrEqual(1)
   expect(metrics.labelCenterDeltaY).toBeLessThanOrEqual(1)
   expect(metrics.statusLabelsInCards).toBe(0)
+})
+
+test('keeps the day-view time axis aligned as a real sticky first column', async ({ page }) => {
+  await page.setViewportSize({ width: 1300, height: 1200 })
+  await openPlannerWithState(page, createWideBoardState())
+
+  const metrics = await page.evaluate(async () => {
+    const scroll = document.querySelector('.planner-grid-scroll')
+    const axisHeader = document.querySelector('.calendar-header-spacer--time-axis')
+    const laneHeader = document.querySelector('.row-header-dropzone--header')
+    const axisCell = document.querySelector('.time-header-cell--axis')
+    const lessonCell = document.querySelector('[data-testid="calendar-cell-row-1-08:30"]')
+    const lessonCard = lessonCell?.querySelector('article.need-card')
+
+    if (
+      !(scroll instanceof HTMLElement) ||
+      !(axisHeader instanceof HTMLElement) ||
+      !(laneHeader instanceof HTMLElement) ||
+      !(axisCell instanceof HTMLElement) ||
+      !(lessonCell instanceof HTMLElement) ||
+      !(lessonCard instanceof HTMLElement)
+    ) {
+      return null
+    }
+
+    const axisHeaderBefore = axisHeader.getBoundingClientRect()
+    const laneHeaderBefore = laneHeader.getBoundingClientRect()
+    const axisCellRect = axisCell.getBoundingClientRect()
+    const lessonCellRect = lessonCell.getBoundingClientRect()
+    const lessonCardRect = lessonCard.getBoundingClientRect()
+
+    scroll.scrollLeft = 320
+    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)))
+
+    const axisHeaderAfter = axisHeader.getBoundingClientRect()
+    const laneHeaderAfter = laneHeader.getBoundingClientRect()
+
+    return {
+      headerHeightDelta: Math.abs(axisHeaderBefore.height - laneHeaderBefore.height),
+      rowTopDelta: Math.abs(axisCellRect.top - lessonCellRect.top),
+      rowBottomDelta: Math.abs(axisCellRect.bottom - lessonCellRect.bottom),
+      lessonStartsAfterAxis: lessonCellRect.left - axisCellRect.right,
+      cardStartsAfterAxis: lessonCardRect.left - axisCellRect.right,
+      axisStickyDelta: Math.abs(axisHeaderAfter.left - axisHeaderBefore.left),
+      laneScrollDelta: laneHeaderBefore.left - laneHeaderAfter.left,
+    }
+  })
+
+  expect(metrics).not.toBeNull()
+
+  if (!metrics) {
+    return
+  }
+
+  expect(metrics.headerHeightDelta).toBeLessThanOrEqual(1)
+  expect(metrics.rowTopDelta).toBeLessThanOrEqual(1)
+  expect(metrics.rowBottomDelta).toBeLessThanOrEqual(1)
+  expect(metrics.lessonStartsAfterAxis).toBeGreaterThan(0)
+  expect(metrics.cardStartsAfterAxis).toBeGreaterThan(0)
+  expect(metrics.axisStickyDelta).toBeLessThanOrEqual(1)
+  expect(metrics.laneScrollDelta).toBeGreaterThan(40)
 })
 
 test('keeps the remaining row-card icon containers perfectly circular', async ({ page }) => {

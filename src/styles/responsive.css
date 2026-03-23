@@ -66,6 +66,8 @@
   :root {
     --planner-row-header-width: 13.5rem;
     --planner-time-min-width: 8.25rem;
+    --planner-time-axis-width: 5.6rem;
+    --planner-lane-column-width: 12.75rem;
     --week-day-min-width: 9.4rem;
   }
 }
@@ -86,6 +88,8 @@
   :root {
     --planner-row-header-width: 12rem;
     --planner-time-min-width: 7.6rem;
+    --planner-time-axis-width: 5.1rem;
+    --planner-lane-column-width: 11.5rem;
     --week-time-width: 5.1rem;
     --week-day-min-width: 8.5rem;
     --week-cell-min-height: 7.4rem;

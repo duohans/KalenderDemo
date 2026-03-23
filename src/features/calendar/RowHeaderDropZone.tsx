@@ -18,12 +18,14 @@ type RowHeaderDropZoneProps = {
   rowId: string
   dayId: WeekdayId
   activeDrag: PlannerDragItem | null
+  variant?: 'lane' | 'header'
 }
 
 export function RowHeaderDropZone({
   rowId,
   dayId,
   activeDrag,
+  variant = 'lane',
 }: RowHeaderDropZoneProps) {
   const state = useScheduleState((plannerState) => plannerState)
   const selection = useScheduleSelection()
@@ -67,6 +69,7 @@ export function RowHeaderDropZone({
       ref={setNodeRef}
       className={cx(
         'row-header-dropzone',
+        variant === 'header' && 'row-header-dropzone--header',
         responsible && 'row-header-dropzone--owned',
         canAcceptDrop && 'drop-target-ready',
         canAcceptDrop && isOver && 'drop-target-valid',
@@ -96,7 +99,10 @@ export function RowHeaderDropZone({
       ) : null}
       <button
         type="button"
-        className="row-header-button"
+        className={cx(
+          'row-header-button',
+          variant === 'header' && 'row-header-button--header',
+        )}
         onClick={() => openSelection({ kind: 'row', rowId, dayId })}
         aria-haspopup="dialog"
         aria-expanded={isSelected}
