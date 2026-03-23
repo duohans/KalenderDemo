@@ -1,8 +1,12 @@
 import { CalendarDays, Layers3 } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { Fragment, useMemo, type CSSProperties } from 'react'
 
 import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
-import { buildCellKey, selectCellNeedCardIdMap } from '../../domain/schedule/selectors.ts'
+import {
+  buildCellKey,
+  selectCellNeedCardIdMap,
+  selectRowDisplayModel,
+} from '../../domain/schedule/selectors.ts'
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import type { WeekdayId } from '../../domain/schedule/types.ts'
 import { useScheduleState } from '../schedule/useSchedule.ts'
@@ -18,14 +22,38 @@ type CalendarGridProps = {
 }
 
 export function CalendarGrid({ activeDrag, dayLabel, selectedDayId }: CalendarGridProps) {
-  const rowOrder = useScheduleState((state) => state.rowOrder)
-  const cellNeedCardMap = useScheduleState((state) => selectCellNeedCardIdMap(state, selectedDayId))
-  const rowCountLabel = `${rowOrder.length} ${rowOrder.length === 1 ? 'rad' : 'rader'}`
-  const laneColumnTrack = 'minmax(var(--planner-lane-column-width), var(--planner-lane-column-width))'
+  const state = useScheduleState((plannerState) => plannerState)
+  const rowDescriptors = useMemo(
+    () =>
+      state.rowOrder.map((rowId) => {
+        const displayModel = selectRowDisplayModel(state, rowId, selectedDayId)
+        const laneState =
+          displayModel && displayModel.cardCount === 0 && !displayModel.responsible
+            ? 'idle'
+            : 'active'
+
+        return {
+          rowId,
+          laneState,
+          rowAccent: displayModel?.rowAccent ?? '#d1d5db',
+        }
+      }),
+    [selectedDayId, state],
+  )
+  const cellNeedCardMap = useMemo(
+    () => selectCellNeedCardIdMap(state, selectedDayId),
+    [selectedDayId, state],
+  )
+  const laneCount = rowDescriptors.length
+  const rowCountLabel = `${laneCount} ${laneCount === 1 ? 'rad' : 'rader'}`
   const boardGridTemplateColumns = [
     'var(--planner-time-axis-width)',
-    ...rowOrder.map(() => laneColumnTrack),
-    laneColumnTrack,
+    ...rowDescriptors.map(() => 'var(--calendar-board-lane-track)'),
+    'var(--calendar-board-placeholder-track)',
+  ].join(' ')
+  const boardGridTemplateRows = [
+    'var(--calendar-header-height)',
+    ...TIME_BLOCKS.map(() => 'minmax(var(--lane-height), auto)'),
   ].join(' ')
 
   return (
@@ -49,49 +77,88 @@ export function CalendarGrid({ activeDrag, dayLabel, selectedDayId }: CalendarGr
             </span>
           </div>
         </div>
-        <div className="planner-grid-scroll flex-1">
+        <div className="planner-grid-scroll planner-grid-scroll--calendar flex-1">
           <div
             className="calendar-board"
-            style={{ ['--calendar-board-columns' as string]: boardGridTemplateColumns } as CSSProperties}
+            data-lane-count={laneCount}
+            style={
+              {
+                ['--calendar-board-columns' as string]: boardGridTemplateColumns,
+                ['--calendar-board-rows' as string]: boardGridTemplateRows,
+              } as CSSProperties
+            }
           >
-            <div className="calendar-lane-header-grid">
+            <div className="calendar-board__corner">
               <div className="calendar-header-spacer calendar-header-spacer--time-axis">
                 <p className="calendar-header-spacer__title">Tid</p>
               </div>
-              {rowOrder.map((rowId) => (
+            </div>
+
+            {rowDescriptors.map(({ rowAccent, rowId, laneState }) => (
+              <div
+                key={`header-${rowId}`}
+                className="calendar-board__lane"
+                data-lane-state={laneState}
+                style={{ ['--row-accent' as string]: rowAccent } as CSSProperties}
+              >
                 <RowHeaderDropZone
-                  key={rowId}
                   rowId={rowId}
                   dayId={selectedDayId}
                   activeDrag={activeDrag}
                   variant="header"
                 />
-              ))}
+              </div>
+            ))}
+
+            <div className="calendar-board__add-lane">
               <NewRowPlaceholder activeDrag={activeDrag} dayId={selectedDayId} variant="header" />
             </div>
 
-            <div className="calendar-time-grid">
-              {TIME_BLOCKS.map((block) => (
-                <div key={block.id} className="calendar-time-row-grid">
-                  <TimeHeader block={block} orientation="axis" />
-                  {rowOrder.map((rowId) => {
+            {TIME_BLOCKS.map((block, blockIndex) => {
+              const rowTone = blockIndex % 2 === 0 ? 'odd' : 'even'
+              const isLastRow = blockIndex === TIME_BLOCKS.length - 1
+
+              return (
+                <Fragment key={block.id}>
+                  <div
+                    className="calendar-board__time"
+                    data-row-tone={rowTone}
+                    data-last-row={isLastRow ? 'true' : undefined}
+                  >
+                    <TimeHeader block={block} orientation="axis" />
+                  </div>
+
+                  {rowDescriptors.map(({ rowAccent, rowId, laneState }) => {
                     const cardId = cellNeedCardMap.get(buildCellKey(rowId, block.id)) ?? null
 
                     return (
-                      <CalendarCell
+                      <div
                         key={`${rowId}-${block.id}`}
-                        rowId={rowId}
-                        dayId={selectedDayId}
-                        timeBlockId={block.id}
-                        cardId={cardId}
-                        activeDrag={activeDrag}
-                      />
+                        className="calendar-board__slot"
+                        data-lane-state={laneState}
+                        data-row-tone={rowTone}
+                        style={{ ['--row-accent' as string]: rowAccent } as CSSProperties}
+                      >
+                        <CalendarCell
+                          rowId={rowId}
+                          dayId={selectedDayId}
+                          timeBlockId={block.id}
+                          cardId={cardId}
+                          activeDrag={activeDrag}
+                        />
+                      </div>
                     )
                   })}
-                  <div className="calendar-column-spacer" aria-hidden="true" />
-                </div>
-              ))}
-            </div>
+
+                  <div
+                    className="calendar-board__buffer"
+                    data-row-tone={rowTone}
+                    data-last-row={isLastRow ? 'true' : undefined}
+                    aria-hidden="true"
+                  />
+                </Fragment>
+              )
+            })}
           </div>
         </div>
       </div>

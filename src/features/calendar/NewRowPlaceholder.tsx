@@ -33,10 +33,21 @@ export function NewRowPlaceholder({
     activeDrag?.type === 'need-card' &&
     canDropOnTarget(state, activeDrag, { type: 'new-row-placeholder', dayId })
   const isActiveDropTarget = Boolean(canAcceptNeedCard && isOver)
-  const title = isActiveDropTarget ? 'Slipp for ny rad' : 'Ny rad'
+  const isHeader = variant === 'header'
+  const title = isActiveDropTarget
+    ? isHeader
+      ? 'Slipp'
+      : 'Slipp for ny rad'
+    : isHeader
+      ? 'Ny rad'
+      : 'Ny rad'
   const copy = isActiveDropTarget
-    ? 'Kortet oppretter en ny rad på sitt faste tidspunkt.'
-    : 'Opprett en tom rad, eller slipp et kort her for å opprette og plassere det.'
+    ? isHeader
+      ? 'Opprett rad'
+      : 'Kortet oppretter en ny rad på sitt faste tidspunkt.'
+    : isHeader
+      ? 'Tom rad'
+      : 'Opprett en tom rad, eller slipp et kort her for å opprette og plassere det.'
 
   return (
     <div

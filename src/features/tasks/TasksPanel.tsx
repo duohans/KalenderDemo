@@ -1,6 +1,5 @@
 import { useDroppable } from '@dnd-kit/core'
 import { Check } from 'lucide-react'
-import { useEffect, useState } from 'react'
 
 import { type PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { selectUnscheduledNeedCardIds } from '../../domain/schedule/selectors.ts'
@@ -10,7 +9,6 @@ import {
   useScheduleState,
 } from '../schedule/useSchedule.ts'
 import { PanelFrame } from '../shared/PanelFrame.tsx'
-import { SideRailPager } from '../shared/SideRailPager.tsx'
 import { TaskCard } from '../shared/TaskCard.tsx'
 
 type TasksPanelProps = {
@@ -18,27 +16,16 @@ type TasksPanelProps = {
   selectedDayId: WeekdayId
 }
 
-const PAGE_SIZE = 5
-
 export function TasksPanel({ activeDrag, selectedDayId }: TasksPanelProps) {
   const state = useScheduleState((plannerState) => plannerState)
   const cardIds = selectUnscheduledNeedCardIds(state, selectedDayId)
   const isEmpty = cardIds.length === 0
-  const totalPages = Math.max(1, Math.ceil(cardIds.length / PAGE_SIZE))
-  const [currentPage, setCurrentPage] = useState(1)
-  const visiblePage = Math.min(Math.max(currentPage, 1), totalPages)
   const { isOver, setNodeRef } = useDroppable({
     id: 'unscheduled-panel',
     data: {
       type: 'unscheduled-panel',
     },
   })
-  const pageStart = (visiblePage - 1) * PAGE_SIZE
-  const visibleCardIds = cardIds.slice(pageStart, pageStart + PAGE_SIZE)
-
-  useEffect(() => {
-    setCurrentPage((page) => Math.min(Math.max(page, 1), totalPages))
-  }, [totalPages])
 
   return (
     <PanelFrame
@@ -46,19 +33,6 @@ export function TasksPanel({ activeDrag, selectedDayId }: TasksPanelProps) {
       subtitle={isEmpty ? 'Ingen åpne behov' : `${cardIds.length} uplanlagte behov`}
       ariaLabel="Uplanlagt"
       className="planner-sidebar planner-sidebar--tasks order-1"
-      footer={
-        <SideRailPager
-          label="Uplanlagt"
-          currentPage={visiblePage}
-          totalPages={totalPages}
-          onPrevious={() => {
-            setCurrentPage((page) => Math.max(page - 1, 1))
-          }}
-          onNext={() => {
-            setCurrentPage((page) => Math.min(page + 1, totalPages))
-          }}
-        />
-      }
     >
       <div
         ref={setNodeRef}
@@ -69,9 +43,9 @@ export function TasksPanel({ activeDrag, selectedDayId }: TasksPanelProps) {
         )}
         title="Dra et kort hit for å sende det tilbake til verktøyfeltet"
       >
-        <div className="panel-scroll panel-scroll--compact flex flex-col">
+        <div className="panel-scroll panel-scroll--compact panel-scroll--tasks-list">
           {!isEmpty ? (
-            visibleCardIds.map((cardId) => (
+            cardIds.map((cardId) => (
               <TaskCard
                 key={cardId}
                 card={state.needCards[cardId]}

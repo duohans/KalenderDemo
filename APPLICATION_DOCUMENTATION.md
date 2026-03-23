@@ -102,13 +102,15 @@ It is:
 
 ## 4. Current Week-View Layout
 
-Week view renders a timetable-style weekly overview.
+Week view renders a polished timetable-style weekly overview aligned to the current day-board system.
 
 ### Grid structure
 
 - header row = weekday buttons
 - first column = time labels
 - body = one cell per `day + time block`
+- board frame ends at the final rendered timeslot instead of stretching into unused trailing space
+- headers, time cells, and lesson cells share the same structured frame/divider language as day view
 
 ### Cell behavior
 
@@ -116,10 +118,12 @@ Each week cell contains the scheduled lessons for that weekday/time slot.
 
 Mini-card behavior:
 
-- visible mini cards render side by side, not as a vertical list
-- visible cards share equal width inside the cell
-- up to `3` mini cards are shown
-- additional lessons collapse into `+N`
+- empty cells use a quiet structural marker instead of visible sentence text
+- `1` visible mini card uses the full cell width
+- `2` visible mini cards render as two equal columns
+- `3` visible mini cards render as three equal columns
+- additional lessons collapse into a narrower `+N` utility chip beside the visible cards
+- week mini cards are slightly denser than day cards but stay in the same visual language
 
 ### Week interactions
 
@@ -286,8 +290,9 @@ Responsibilities:
 Behavior:
 
 - fixed-height rail
-- paged in groups of `5`
-- overflow handled by paging, not normal scrolling
+- vertically scrolling single-column list
+- visual order matches render/selector order
+- no pager footer
 
 ### `Vikarer`
 
@@ -575,8 +580,8 @@ Owns:
 Owns:
 
 - `Uplanlagt` drop zone
-- paged unscheduled cards
-- fixed footer pager
+- vertically scrolling unscheduled-card list
+- empty-state rendering for the left rail
 
 ### `src/features/people/PeoplePanel.tsx`
 
@@ -617,7 +622,8 @@ Current visual direction:
 - muted sage and clay accents
 - Fraunces only for high-level headings
 - Manrope for operational UI text
-- calm card shells
+- quiet timetable surfaces
+- day and week views share the same structured board language
 - compact but readable timetable geometry
 
 ## 20. Motion And Feedback
@@ -665,10 +671,11 @@ They cover:
 They cover:
 
 - shell structure
+- left-rail scrolling and right-rail paging behavior
 - row creation/removal
-- side-rail paging
 - detail-sheet flows
 - keyboard behavior
+- week-view detail-sheet and day-jump behavior
 
 ### End-to-end tests
 
@@ -679,7 +686,8 @@ They cover:
 - row-header auto-placement
 - new-row placeholder creation
 - wrong-time rejection
-- fixed side rails and paging
+- fixed side rails with a scrolling `Uplanlagt` list and paged `Vikarer` rail
+- week-view aligned-grid behavior and multi-card packing
 - footer containment
 - detail-sheet time confirmation
 - week-view behavior
@@ -691,10 +699,14 @@ Main scripts from `package.json`:
 
 - `npm run dev`
 - `npm run build`
-- `npm test`
+- `npm run test`
 - `npm run test:e2e`
 - `npm run lint`
 - `npm run preview`
+
+Current caveat:
+
+- `npm run lint` currently reports known existing repo issues, so `test`, `build`, and `test:e2e` are the clean verification commands in the current snapshot.
 
 ## 24. Implementation Boundaries
 

@@ -182,6 +182,26 @@ function createCrowdedWeekCellState() {
   return state
 }
 
+function createTwoCardWeekCellState() {
+  const state = createSeedPlannerState()
+
+  state.rows['row-2'] = {
+    id: 'row-2',
+    order: 1,
+    rowResponsibleId: null,
+  }
+  state.rowOrder = ['row-1', 'row-2']
+
+  state.needCards['card-samfunn-8c'] = {
+    ...state.needCards['card-samfunn-8c'],
+    placement: 'scheduled',
+    rowId: 'row-2',
+    timeBlockId: '08:30',
+  }
+
+  return state
+}
+
 function createWideBoardState() {
   const state = createSeedPlannerState()
 
@@ -269,6 +289,116 @@ test('opens a planned lesson detail sheet inside week view and supports an expli
 
   await expect(page.getByRole('region', { name: 'Dagstavle' })).toBeVisible()
   await expect(dialog).toContainText('Naturfag 7B')
+})
+
+test('renders the week view as an aligned timetable with quiet empty cells', async ({
+  page,
+}) => {
+  await openFreshPlanner(page)
+
+  await page.getByRole('tab', { name: 'Uke' }).click()
+  await expect(page.getByRole('region', { name: 'Ukeoversikt' })).toBeVisible()
+  await expect(page.getByText('Ingen planlagte timer')).toHaveCount(0)
+
+  const metrics = await page.evaluate(() => {
+    const scroll = document.querySelector<HTMLElement>('.planner-grid-scroll--week')
+    const board = document.querySelector<HTMLElement>('.week-board')
+    const lastRow = document.querySelector<HTMLElement>('.week-board__row-grid:last-child')
+    const headerCells = Array.from(
+      document.querySelectorAll<HTMLElement>('.week-board__header-grid > *'),
+    )
+    const firstRowCells = Array.from(
+      document.querySelectorAll<HTMLElement>('.week-board__row-grid:first-child > *'),
+    )
+    const emptyCells = Array.from(document.querySelectorAll<HTMLElement>('.week-board__empty'))
+
+    if (!scroll || !board || !lastRow || headerCells.length === 0 || firstRowCells.length === 0) {
+      return null
+    }
+
+    const boardRect = board.getBoundingClientRect()
+    const lastRowRect = lastRow.getBoundingClientRect()
+    const headerRects = headerCells.map((cell) => cell.getBoundingClientRect())
+    const firstRowRects = firstRowCells.map((cell) => cell.getBoundingClientRect())
+    const headerHeights = headerRects.map((rect) => rect.height)
+    const rowHeights = firstRowRects.map((rect) => rect.height)
+    const headerHeightSpread = Math.max(...headerHeights) - Math.min(...headerHeights)
+    const rowHeightSpread = Math.max(...rowHeights) - Math.min(...rowHeights)
+
+    return {
+      columnsAlign:
+        headerRects.length === firstRowRects.length &&
+        headerRects.every(
+          (rect, index) =>
+            Math.abs(rect.left - firstRowRects[index].left) <= 1 &&
+            Math.abs(rect.width - firstRowRects[index].width) <= 1,
+        ),
+      headerHeightSpread,
+      rowHeightSpread,
+      selectedHeaderCount: document.querySelectorAll('.week-board__day-header--selected').length,
+      selectedCellCount: document.querySelectorAll('.week-board__cell--selected').length,
+      emptyCellCount: emptyCells.length,
+      emptyTextCount: emptyCells.filter((cell) => cell.textContent?.trim().length).length,
+      boardBottomGap: Math.abs(boardRect.bottom - lastRowRect.bottom),
+      boardFitsViewport: board.scrollWidth - scroll.clientWidth <= 1,
+    }
+  })
+
+  expect(metrics).not.toBeNull()
+  expect(metrics?.columnsAlign).toBe(true)
+  expect(metrics?.headerHeightSpread).toBeLessThanOrEqual(1)
+  expect(metrics?.rowHeightSpread).toBeLessThanOrEqual(1)
+  expect(metrics?.selectedHeaderCount).toBe(1)
+  expect(metrics?.selectedCellCount).toBeGreaterThan(0)
+  expect(metrics?.emptyCellCount).toBeGreaterThan(0)
+  expect(metrics?.emptyTextCount).toBe(0)
+  expect(metrics?.boardBottomGap).toBeLessThanOrEqual(3)
+  expect(metrics?.boardFitsViewport).toBe(true)
+})
+
+test('packs two week-view lessons side by side with readable spacing and equal widths', async ({
+  page,
+}) => {
+  await openPlannerWithState(page, createTwoCardWeekCellState())
+
+  await page.getByRole('tab', { name: 'Uke' }).click()
+
+  const mondayMorningCell = page
+    .locator('.week-board__row-grid')
+    .first()
+    .locator('.week-board__cell')
+    .first()
+
+  await expect(mondayMorningCell.locator('.week-mini-card')).toHaveCount(2)
+  await expect(mondayMorningCell.locator('.week-mini-card__more')).toHaveCount(0)
+
+  const metrics = await mondayMorningCell.evaluate((cell) => {
+    const cards = Array.from(cell.querySelectorAll<HTMLElement>('.week-mini-card'))
+
+    if (cards.length !== 2) {
+      return null
+    }
+
+    const rects = cards.map((card) => card.getBoundingClientRect())
+    const gap = rects[1].left - rects[0].right
+
+    return {
+      horizontalOrder: rects[0].left < rects[1].left,
+      sameRow: Math.abs(rects[0].top - rects[1].top) < 2,
+      equalWidths: Math.abs(rects[0].width - rects[1].width) < 2,
+      equalHeights: Math.abs(rects[0].height - rects[1].height) < 2,
+      nonOverlapping: rects[0].right <= rects[1].left,
+      stableGap: gap >= 3 && gap <= 14,
+    }
+  })
+
+  expect(metrics).not.toBeNull()
+  expect(metrics?.horizontalOrder).toBe(true)
+  expect(metrics?.sameRow).toBe(true)
+  expect(metrics?.equalWidths).toBe(true)
+  expect(metrics?.equalHeights).toBe(true)
+  expect(metrics?.nonOverlapping).toBe(true)
+  expect(metrics?.stableGap).toBe(true)
 })
 
 test('lays out multiple week-view lessons side by side with equal widths and compact overflow', async ({
@@ -412,6 +542,89 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
   expect(metrics.statusLabelsInCards).toBe(0)
 })
 
+test('fills scheduled board cards to the full cell footprint', async ({ page }) => {
+  await openFreshPlanner(page)
+
+  const metrics = await page.evaluate(() => {
+    const cell = document.querySelector('[data-testid="calendar-cell-row-1-08:30"]')
+    const card = cell?.querySelector('article.need-card')
+
+    if (!(cell instanceof HTMLElement) || !(card instanceof HTMLElement)) {
+      return null
+    }
+
+    const cellRect = cell.getBoundingClientRect()
+    const cardRect = card.getBoundingClientRect()
+
+    return {
+      widthGap: cellRect.width - cardRect.width,
+      heightGap: cellRect.height - cardRect.height,
+    }
+  })
+
+  expect(metrics).not.toBeNull()
+
+  if (!metrics) {
+    return
+  }
+
+  expect(metrics.widthGap).toBeLessThanOrEqual(2.5)
+  expect(metrics.heightGap).toBeLessThanOrEqual(2.5)
+})
+
+test('hides room in day-board cards while keeping it in the detail sheet', async ({ page }) => {
+  await openFreshPlanner(page)
+
+  const boardCard = page.getByTestId('calendar-cell-row-1-08:30').getByLabel(/kort matematikk 6a/i)
+
+  await expect(boardCard.locator('.need-card__room')).toHaveCount(0)
+
+  await boardCard.click()
+
+  const dialog = page.getByRole('dialog')
+
+  await expect(dialog).toContainText('Matematikk 6A')
+  await expect(dialog.getByText('Rom', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Rom 204')).toBeVisible()
+})
+
+test('keeps compact day-board rows aligned after the density reduction', async ({ page }) => {
+  await openFreshPlanner(page)
+
+  const metrics = await page.evaluate(() => {
+    const axisCell = document.querySelector('.time-header-cell--axis')
+    const lessonCell = document.querySelector('[data-testid="calendar-cell-row-1-08:30"]')
+    const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+    const expectedRowHeight = rootFontSize * 8.4
+
+    if (!(axisCell instanceof HTMLElement) || !(lessonCell instanceof HTMLElement)) {
+      return null
+    }
+
+    const axisRect = axisCell.getBoundingClientRect()
+    const lessonRect = lessonCell.getBoundingClientRect()
+
+    return {
+      axisHeight: axisRect.height,
+      lessonHeight: lessonRect.height,
+      expectedRowHeight,
+      rowTopDelta: Math.abs(axisRect.top - lessonRect.top),
+      rowBottomDelta: Math.abs(axisRect.bottom - lessonRect.bottom),
+    }
+  })
+
+  expect(metrics).not.toBeNull()
+
+  if (!metrics) {
+    return
+  }
+
+  expect(Math.abs(metrics.lessonHeight - metrics.expectedRowHeight)).toBeLessThanOrEqual(4)
+  expect(Math.abs(metrics.axisHeight - metrics.lessonHeight)).toBeLessThanOrEqual(1)
+  expect(metrics.rowTopDelta).toBeLessThanOrEqual(1)
+  expect(metrics.rowBottomDelta).toBeLessThanOrEqual(1)
+})
+
 test('keeps the day-view time axis aligned as a real sticky first column', async ({ page }) => {
   await page.setViewportSize({ width: 1300, height: 1200 })
   await openPlannerWithState(page, createWideBoardState())
@@ -446,6 +659,12 @@ test('keeps the day-view time axis aligned as a real sticky first column', async
 
     const axisHeaderAfter = axisHeader.getBoundingClientRect()
     const laneHeaderAfter = laneHeader.getBoundingClientRect()
+    const axisCellAfter = axisCell.getBoundingClientRect()
+    const scrollRect = scroll.getBoundingClientRect()
+    const gutterProbe = document.elementFromPoint(
+      scrollRect.left + 2,
+      axisCellAfter.top + axisCellAfter.height / 2,
+    )
 
     return {
       headerHeightDelta: Math.abs(axisHeaderBefore.height - laneHeaderBefore.height),
@@ -455,6 +674,8 @@ test('keeps the day-view time axis aligned as a real sticky first column', async
       cardStartsAfterAxis: lessonCardRect.left - axisCellRect.right,
       axisStickyDelta: Math.abs(axisHeaderAfter.left - axisHeaderBefore.left),
       laneScrollDelta: laneHeaderBefore.left - laneHeaderAfter.left,
+      axisLeftGap: Math.abs(axisCellAfter.left - scrollRect.left),
+      gutterLeaksSlot: Boolean(gutterProbe?.closest('.calendar-board__slot, .need-card')),
     }
   })
 
@@ -471,6 +692,72 @@ test('keeps the day-view time axis aligned as a real sticky first column', async
   expect(metrics.cardStartsAfterAxis).toBeGreaterThan(0)
   expect(metrics.axisStickyDelta).toBeLessThanOrEqual(1)
   expect(metrics.laneScrollDelta).toBeGreaterThan(40)
+  expect(metrics.axisLeftGap).toBeLessThanOrEqual(1)
+  expect(metrics.gutterLeaksSlot).toBe(false)
+})
+
+test('keeps day-board lane widths fixed when lane count changes', async ({ page }) => {
+  await openPlannerWithState(page, createEmptyRowState())
+
+  const compactMetrics = await page.evaluate(() => {
+    const laneHeaders = Array.from(document.querySelectorAll('.calendar-board__lane'))
+    const laneSlots = Array.from(document.querySelectorAll('.calendar-board__slot'))
+
+    if (laneHeaders.length === 0 || laneSlots.length === 0) {
+      return null
+    }
+
+    const collectWidths = (elements: Element[]) =>
+      elements.map((element) => element.getBoundingClientRect().width)
+
+    const headerWidths = collectWidths(laneHeaders)
+    const slotWidths = collectWidths(laneSlots.slice(0, laneHeaders.length))
+
+    return {
+      firstHeaderWidth: headerWidths[0],
+      firstSlotWidth: slotWidths[0],
+      headerSpread: Math.max(...headerWidths) - Math.min(...headerWidths),
+      slotSpread: Math.max(...slotWidths) - Math.min(...slotWidths),
+    }
+  })
+
+  await openPlannerWithState(page, createWideBoardState())
+
+  const wideMetrics = await page.evaluate(() => {
+    const laneHeaders = Array.from(document.querySelectorAll('.calendar-board__lane'))
+    const laneSlots = Array.from(document.querySelectorAll('.calendar-board__slot'))
+
+    if (laneHeaders.length === 0 || laneSlots.length === 0) {
+      return null
+    }
+
+    const collectWidths = (elements: Element[]) =>
+      elements.map((element) => element.getBoundingClientRect().width)
+
+    const headerWidths = collectWidths(laneHeaders)
+    const slotWidths = collectWidths(laneSlots.slice(0, laneHeaders.length))
+
+    return {
+      firstHeaderWidth: headerWidths[0],
+      firstSlotWidth: slotWidths[0],
+      headerSpread: Math.max(...headerWidths) - Math.min(...headerWidths),
+      slotSpread: Math.max(...slotWidths) - Math.min(...slotWidths),
+    }
+  })
+
+  expect(compactMetrics).not.toBeNull()
+  expect(wideMetrics).not.toBeNull()
+
+  if (!compactMetrics || !wideMetrics) {
+    return
+  }
+
+  expect(Math.abs(compactMetrics.firstHeaderWidth - wideMetrics.firstHeaderWidth)).toBeLessThanOrEqual(1)
+  expect(Math.abs(compactMetrics.firstSlotWidth - wideMetrics.firstSlotWidth)).toBeLessThanOrEqual(1)
+  expect(compactMetrics.headerSpread).toBeLessThanOrEqual(1)
+  expect(compactMetrics.slotSpread).toBeLessThanOrEqual(1)
+  expect(wideMetrics.headerSpread).toBeLessThanOrEqual(1)
+  expect(wideMetrics.slotSpread).toBeLessThanOrEqual(1)
 })
 
 test('keeps the remaining row-card icon containers perfectly circular', async ({ page }) => {
@@ -517,27 +804,27 @@ test('keeps the remaining row-card icon containers perfectly circular', async ({
   expect(metrics.emptyTeacherPill.delta).toBeLessThanOrEqual(1)
 })
 
-test('keeps side rails fixed and paged when panel content exceeds five items', async ({ page }) => {
+test('keeps side rails fixed while the Unplanned rail scrolls as a single vertical list', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
   await openPlannerWithState(page, createMultiPageRailState())
 
   const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
   const peoplePanel = page.getByRole('region', { name: 'Vikarer' })
 
-  await expect(tasksPanel.locator('[aria-label^="Kort "]')).toHaveCount(5)
+  await expect(tasksPanel.locator('[aria-label^="Kort "]')).toHaveCount(10)
   await expect(peoplePanel.locator('[aria-label^="Vikar "]')).toHaveCount(5)
-  await expect(tasksPanel.getByText('1 / 2')).toBeVisible()
+  await expect(tasksPanel.getByRole('navigation', { name: /sider for uplanlagt/i })).toHaveCount(0)
   await expect(peoplePanel.getByText('1 / 2')).toBeVisible()
-  await expect(tasksPanel.getByLabel(/kort ekstrafag 11z/i)).toHaveCount(0)
+  await expect(tasksPanel.getByLabel(/kort ekstrafag 11z/i)).toHaveCount(1)
   await expect(peoplePanel.getByLabel(/vikar ågot øie/i)).toHaveCount(0)
 
-  await tasksPanel.getByRole('button', { name: /neste side i uplanlagt/i }).click()
   await peoplePanel.getByRole('button', { name: /neste side i vikarer/i }).click()
 
-  await expect(tasksPanel.locator('[aria-label^="Kort "]')).toHaveCount(5)
+  await expect(tasksPanel.locator('[aria-label^="Kort "]')).toHaveCount(10)
   await expect(peoplePanel.locator('[aria-label^="Vikar "]')).toHaveCount(2)
-  await expect(tasksPanel.getByLabel(/kort ekstrafag 11z/i)).toBeVisible()
+  await expect(tasksPanel.getByLabel(/kort ekstrafag 11z/i)).toHaveCount(1)
   await expect(peoplePanel.getByLabel(/vikar ågot øie/i)).toBeVisible()
-  await expect(tasksPanel.getByText('2 / 2')).toBeVisible()
+  await expect(peoplePanel.getByText('2 / 2')).toBeVisible()
 
   const metrics = await page.evaluate(() => {
     const tasksPanel = document.querySelector('[aria-label="Uplanlagt"]')
@@ -558,6 +845,11 @@ test('keeps side rails fixed and paged when panel content exceeds five items', a
       return null
     }
 
+    const taskCards = Array.from(tasksScroll.querySelectorAll<HTMLElement>('.need-card-host--panel')).slice(0, 6)
+    const taskCardRects = taskCards.map((card) => card.getBoundingClientRect())
+    const taskCardLefts = taskCardRects.map((rect) => rect.left)
+    const taskCardTops = taskCardRects.map((rect) => rect.top)
+
     return {
       pageHeight: scrollingElement.scrollHeight,
       viewportHeight: window.innerHeight,
@@ -568,6 +860,13 @@ test('keeps side rails fixed and paged when panel content exceeds five items', a
       tasksClientHeight: tasksScroll.clientHeight,
       tasksScrollWidth: tasksScroll.scrollWidth,
       tasksClientWidth: tasksScroll.clientWidth,
+      tasksCardCount: taskCards.length,
+      tasksSingleColumn:
+        taskCardLefts.length > 1 &&
+        taskCardLefts.every((left) => Math.abs(left - taskCardLefts[0]) <= 1),
+      tasksTopDownOrder:
+        taskCardTops.length > 1 &&
+        taskCardTops.every((top, index) => index === 0 || top > taskCardTops[index - 1]),
       peopleScrollHeight: peopleScroll.scrollHeight,
       peopleClientHeight: peopleScroll.clientHeight,
       peopleScrollWidth: peopleScroll.scrollWidth,
@@ -582,7 +881,10 @@ test('keeps side rails fixed and paged when panel content exceeds five items', a
   }
 
   expect(metrics.pageHeight - metrics.viewportHeight).toBeLessThanOrEqual(2)
-  expect(metrics.tasksScrollHeight - metrics.tasksClientHeight).toBeLessThanOrEqual(2)
+  expect(metrics.tasksCardCount).toBeGreaterThanOrEqual(6)
+  expect(metrics.tasksSingleColumn).toBe(true)
+  expect(metrics.tasksTopDownOrder).toBe(true)
+  expect(metrics.tasksScrollHeight).toBeGreaterThan(metrics.tasksClientHeight + 20)
   expect(metrics.peopleScrollHeight - metrics.peopleClientHeight).toBeLessThanOrEqual(2)
   expect(metrics.tasksScrollWidth - metrics.tasksClientWidth).toBeLessThanOrEqual(1)
   expect(metrics.peopleScrollWidth - metrics.peopleClientWidth).toBeLessThanOrEqual(1)
@@ -623,7 +925,8 @@ test('keeps scheduled lesson card footers inside the card and cell bounds', asyn
     expect(cardGeometry.footerInsideCard).toBe(true)
     expect(cardGeometry.cardInsideCell).toBe(true)
     expect(cardGeometry.cardBottomInset).toBeGreaterThan(4)
-    expect(cardGeometry.cellBottomInset).toBeGreaterThan(4)
+    expect(cardGeometry.cellBottomInset).toBeGreaterThanOrEqual(0)
+    expect(cardGeometry.cellBottomInset).toBeLessThanOrEqual(2.5)
   }
 })
 

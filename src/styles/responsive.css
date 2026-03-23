@@ -92,7 +92,7 @@
     --planner-lane-column-width: 11.5rem;
     --week-time-width: 5.1rem;
     --week-day-min-width: 8.5rem;
-    --week-cell-min-height: 7.4rem;
+    --week-cell-min-height: calc(var(--lane-height) - 1rem);
   }
 
   .planner-panel__body,

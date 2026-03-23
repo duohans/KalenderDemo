@@ -1,25 +1,28 @@
-import { CircleDashed, Plus, X } from 'lucide-react'
+import { CircleDashed } from 'lucide-react'
 import { cx } from '../../lib/cx.ts'
 
 type EmptyCellStateProps = {
   isNeedCardDragActive: boolean
   canAcceptNeedCard: boolean
+  isOver: boolean
 }
 
 export function EmptyCellState({
   isNeedCardDragActive,
   canAcceptNeedCard,
+  isOver,
 }: EmptyCellStateProps) {
-  const isReady = isNeedCardDragActive && canAcceptNeedCard
-  const isBlocked = isNeedCardDragActive && !canAcceptNeedCard
-  const Icon = isNeedCardDragActive ? (canAcceptNeedCard ? Plus : X) : CircleDashed
-  const label = isNeedCardDragActive ? (canAcceptNeedCard ? 'Slipp her' : 'Opptatt') : 'Tom celle'
+  const isTargeted = isNeedCardDragActive && isOver
+  const isReady = isTargeted && canAcceptNeedCard
+  const isBlocked = isTargeted && !canAcceptNeedCard
+  const Icon = isTargeted ? null : CircleDashed
+  const label = isReady ? 'Slipp her' : isBlocked ? 'Kan ikke slippes her' : 'Tom celle'
 
   return (
     <div
       className={cx(
         'empty-cell-state',
-        isNeedCardDragActive && 'empty-cell-state--engaged',
+        isTargeted && 'empty-cell-state--engaged',
         isReady && 'empty-cell-state--ready',
         isBlocked && 'empty-cell-state--blocked',
       )}
@@ -27,13 +30,15 @@ export function EmptyCellState({
       data-ready={isReady ? 'true' : 'false'}
       aria-label={label}
     >
-      <span aria-hidden="true" className="empty-cell-state__glyph">
-        <Icon size={18} strokeWidth={2.25} />
-      </span>
-      <span aria-hidden="true" className="empty-cell-state__line" />
-      {isNeedCardDragActive ? (
+      {Icon ? (
+        <span aria-hidden="true" className="empty-cell-state__glyph">
+          <Icon size={18} strokeWidth={2.25} />
+        </span>
+      ) : null}
+      {!isTargeted ? <span aria-hidden="true" className="empty-cell-state__line" /> : null}
+      {isTargeted ? (
         <span aria-hidden="true" className="empty-cell-state__label">
-          {label}
+          {isReady ? 'Slipp her' : 'Opptatt'}
         </span>
       ) : null}
     </div>

@@ -86,128 +86,144 @@ export function WeekView({
                   )}
                   onClick={() => onOpenDay(day.id)}
                 >
-                  <span className="panel-kicker">{day.shortLabel}</span>
+                  <span className="panel-kicker week-board__day-kicker">
+                    {day.shortLabel}
+                  </span>
                   <span className="week-board__day-label">{day.label}</span>
                 </button>
               ))}
             </div>
 
             <div className="week-board__rows">
-              {weekGrid.rows.map((row) => (
-                <div key={row.timeBlock.id} className="week-board__row-grid">
-                  <div className="week-board__time-cell">
-                    <span className="week-board__time-start">{row.timeBlock.start}</span>
-                    <span className="week-board__time-end">{row.timeBlock.end}</span>
-                  </div>
+              {weekGrid.rows.map((row, rowIndex) => {
+                const rowTone = rowIndex % 2 === 0 ? 'odd' : 'even'
 
-                  {row.cells.map((cell) => {
-                    const visibleCards = cell.cards.slice(0, MAX_VISIBLE_CARDS)
-                    const hiddenCount = Math.max(0, cell.cards.length - visibleCards.length)
-                    const dayLabel =
-                      weekGrid.days.find((day) => day.id === cell.dayId)?.label ?? cell.dayId
+                return (
+                  <div key={row.timeBlock.id} className="week-board__row-grid">
+                    <div className="week-board__time-cell" data-row-tone={rowTone}>
+                      <span className="week-board__time-start">{row.timeBlock.start}</span>
+                      <span className="week-board__time-end">{row.timeBlock.end}</span>
+                    </div>
 
-                    return (
-                      <div
-                        key={`${cell.dayId}-${cell.timeBlockId}`}
-                        role="button"
-                        tabIndex={0}
-                        className={cx(
-                          'week-board__cell',
-                          cell.dayId === selectedDayId && 'week-board__cell--selected',
-                        )}
-                        aria-label={`Åpne ${dayLabel} ${row.timeBlock.label} i dagvisning`}
-                        onClick={() => onOpenDay(cell.dayId, cell.timeBlockId)}
-                        onKeyDown={(event) =>
-                          onActionKeyDown(event, () => onOpenDay(cell.dayId, cell.timeBlockId))
-                        }
-                      >
-                        {visibleCards.length > 0 ? (
-                          <div className="week-board__stack">
-                            {visibleCards.map((card) => (
-                              (() => {
-                                const StatusIcon = iconByTone[card.statusTone]
+                    {row.cells.map((cell) => {
+                      const visibleCards = cell.cards.slice(0, MAX_VISIBLE_CARDS)
+                      const hiddenCount = Math.max(0, cell.cards.length - visibleCards.length)
+                      const dayLabel =
+                        weekGrid.days.find((day) => day.id === cell.dayId)?.label ?? cell.dayId
 
-                                return (
-                                  <button
-                                    key={card.cardId}
-                                    type="button"
-                                    className={cx(
-                                      'week-mini-card',
-                                      `week-mini-card--${card.statusTone}`,
-                                    )}
-                                    style={
-                                      {
-                                        ['--week-card-accent' as string]: card.accentColor,
-                                        ['--week-card-teacher-accent' as string]: card.teacherAccent,
-                                        ['--week-card-assignee-accent' as string]:
-                                          card.assigneeAccent,
-                                      } as CSSProperties
-                                    }
-                                    aria-label={`Åpne detaljer for ${card.subjectLabel} ${card.classLabel}`}
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      onOpenCard(cell.dayId, card.cardId)
-                                    }}
-                                  >
-                                    <span aria-hidden="true" className="week-mini-card__band" />
-                                    <span className="week-mini-card__head">
-                                      <span
-                                        className="week-mini-card__teacher-avatar"
-                                        title={card.teacherName}
-                                      >
-                                        {card.teacherAvatarInitials}
-                                      </span>
-                                      <span className="week-mini-card__status-mark">
-                                        <StatusIcon size={11} strokeWidth={2.2} />
-                                      </span>
-                                    </span>
-                                    <span className="week-mini-card__body">
-                                      <span className="week-mini-card__class">{card.classLabel}</span>
-                                      <span className="week-mini-card__subject">{card.subjectLabel}</span>
-                                    </span>
-                                    <span
+                      return (
+                        <div
+                          key={`${cell.dayId}-${cell.timeBlockId}`}
+                          role="button"
+                          tabIndex={0}
+                          className={cx(
+                            'week-board__cell',
+                            cell.dayId === selectedDayId && 'week-board__cell--selected',
+                          )}
+                          data-row-tone={rowTone}
+                          aria-label={`Åpne ${dayLabel} ${row.timeBlock.label} i dagvisning`}
+                          onClick={() => onOpenDay(cell.dayId, cell.timeBlockId)}
+                          onKeyDown={(event) =>
+                            onActionKeyDown(event, () => onOpenDay(cell.dayId, cell.timeBlockId))
+                          }
+                        >
+                          {visibleCards.length > 0 ? (
+                            <div
+                              className="week-board__stack"
+                              data-visible-count={visibleCards.length}
+                              data-has-overflow={hiddenCount > 0}
+                            >
+                              {visibleCards.map((card) => (
+                                (() => {
+                                  const StatusIcon = iconByTone[card.statusTone]
+
+                                  return (
+                                    <button
+                                      key={card.cardId}
+                                      type="button"
                                       className={cx(
-                                        'week-mini-card__assignee-chip',
-                                        !card.assigneeAvatarInitials &&
-                                          'week-mini-card__assignee-chip--empty',
+                                        'week-mini-card',
+                                        `week-mini-card--${card.statusTone}`,
                                       )}
+                                      style={
+                                        {
+                                          ['--week-card-accent' as string]: card.accentColor,
+                                          ['--week-card-teacher-accent' as string]:
+                                            card.teacherAccent,
+                                          ['--week-card-assignee-accent' as string]:
+                                            card.assigneeAccent,
+                                        } as CSSProperties
+                                      }
+                                      aria-label={`Åpne detaljer for ${card.subjectLabel} ${card.classLabel}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        onOpenCard(cell.dayId, card.cardId)
+                                      }}
                                     >
+                                      <span aria-hidden="true" className="week-mini-card__band" />
+                                      <span className="week-mini-card__head">
+                                        <span
+                                          className="week-mini-card__teacher-avatar"
+                                          title={card.teacherName}
+                                        >
+                                          {card.teacherAvatarInitials}
+                                        </span>
+                                        <span className="week-mini-card__status-mark">
+                                          <StatusIcon size={11} strokeWidth={2.2} />
+                                        </span>
+                                      </span>
+                                      <span className="week-mini-card__body">
+                                        <span className="week-mini-card__class">
+                                          {card.classLabel}
+                                        </span>
+                                        <span className="week-mini-card__subject">
+                                          {card.subjectLabel}
+                                        </span>
+                                      </span>
                                       <span
                                         className={cx(
-                                          'week-mini-card__assignee-avatar',
+                                          'week-mini-card__assignee-chip',
                                           !card.assigneeAvatarInitials &&
-                                            'week-mini-card__assignee-avatar--empty',
+                                            'week-mini-card__assignee-chip--empty',
                                         )}
                                       >
-                                        {card.assigneeAvatarInitials ?? (
-                                          <StatusIcon size={10} strokeWidth={2.25} />
-                                        )}
+                                        <span
+                                          className={cx(
+                                            'week-mini-card__assignee-avatar',
+                                            !card.assigneeAvatarInitials &&
+                                              'week-mini-card__assignee-avatar--empty',
+                                          )}
+                                        >
+                                          {card.assigneeAvatarInitials ?? (
+                                            <StatusIcon size={10} strokeWidth={2.25} />
+                                          )}
+                                        </span>
+                                        <span className="week-mini-card__assignee">
+                                          {card.assigneeLabel}
+                                        </span>
                                       </span>
-                                      <span className="week-mini-card__assignee">
-                                        {card.assigneeLabel}
-                                      </span>
-                                    </span>
-                                  </button>
-                                )
-                              })()
-                            ))}
-                            {hiddenCount > 0 ? (
-                              <span
-                                className="week-mini-card__more"
-                                aria-label={`${hiddenCount} flere planlagte timer i denne ruten`}
-                              >
-                                +{hiddenCount}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="week-board__empty">Ingen planlagte timer</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
+                                    </button>
+                                  )
+                                })()
+                              ))}
+                              {hiddenCount > 0 ? (
+                                <span
+                                  className="week-mini-card__more"
+                                  aria-label={`${hiddenCount} flere planlagte timer i denne ruten`}
+                                >
+                                  +{hiddenCount}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="week-board__empty" aria-hidden="true" />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>

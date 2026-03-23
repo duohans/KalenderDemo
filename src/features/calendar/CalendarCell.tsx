@@ -67,6 +67,7 @@ export function CalendarCell({
         <EmptyCellState
           isNeedCardDragActive={Boolean(isNeedCardDragActive)}
           canAcceptNeedCard={Boolean(canAcceptNeedCard)}
+          isOver={isOver}
         />
       )}
     </div>

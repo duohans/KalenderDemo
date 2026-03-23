@@ -120,10 +120,11 @@ export function RowHeaderDropZone({
               </span>
             )}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="row-header__copy">
             <h3 className="row-header__title" title={title.full}>
               {title.compact}
             </h3>
+            <span className="row-header__summary">{displayModel.secondaryLabel}</span>
           </div>
         </div>
 
@@ -153,28 +154,25 @@ export function RowHeaderDropZone({
               </span>
             ) : null}
           </div>
-
-          <div className="row-header__actions">
-            <button
-              type="button"
-              className="row-header__utility"
-              onPointerDown={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-              }}
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                pushMotionEvent({ type: 'removeRow', rowId })
-                dispatch({ type: 'removeRow', rowId })
-              }}
-              aria-label={`Fjern ${title.full}`}
-              title="Fjern rad"
-            >
-              <Trash2 aria-hidden="true" size={14} strokeWidth={2.1} />
-            </button>
-          </div>
         </div>
+      </button>
+      <button
+        type="button"
+        className="row-header__utility"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          pushMotionEvent({ type: 'removeRow', rowId })
+          dispatch({ type: 'removeRow', rowId })
+        }}
+        aria-label={`Fjern ${title.full}`}
+        title="Fjern rad"
+      >
+        <Trash2 aria-hidden="true" size={14} strokeWidth={2.1} />
       </button>
     </div>
   )

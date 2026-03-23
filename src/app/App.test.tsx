@@ -114,7 +114,7 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Vikarer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /opprett ny rad/i })).toBeInTheDocument()
-    expect(within(tasksPanel).getByText('1 / 2')).toBeInTheDocument()
+    expect(within(tasksPanel).queryByText('1 / 2')).not.toBeInTheDocument()
     expect(within(peoplePanel).getByText('1 / 1')).toBeInTheDocument()
 
     const rowButton = screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })
@@ -124,7 +124,7 @@ describe('App', () => {
     expect(rowTitle).not.toHaveClass('planner-heading')
   })
 
-  it('pages both side rails in groups of five', async () => {
+  it('shows the Unplanned rail as one vertical list while the People rail stays paged', async () => {
     const user = userEvent.setup()
 
     resetPlannerStore(createMultiPageRailState())
@@ -133,41 +133,39 @@ describe('App', () => {
     const tasksPanel = screen.getByRole('region', { name: 'Uplanlagt' })
     const peoplePanel = screen.getByRole('region', { name: 'Vikarer' })
 
-    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(5)
+    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(10)
     expect(within(peoplePanel).getAllByLabelText(/^vikar /i)).toHaveLength(5)
-    expect(within(tasksPanel).getByText('1 / 2')).toBeInTheDocument()
+    expect(within(tasksPanel).queryByRole('navigation', { name: /sider for uplanlagt/i })).not.toBeInTheDocument()
     expect(within(peoplePanel).getByText('1 / 2')).toBeInTheDocument()
-    expect(within(tasksPanel).queryByLabelText(/kort ekstrafag 11z/i)).not.toBeInTheDocument()
+    expect(within(tasksPanel).getByLabelText(/kort ekstrafag 11z/i)).toBeInTheDocument()
     expect(within(peoplePanel).queryByLabelText(/vikar ågot øie/i)).not.toBeInTheDocument()
 
-    await user.click(within(tasksPanel).getByRole('button', { name: /neste side i uplanlagt/i }))
     await user.click(within(peoplePanel).getByRole('button', { name: /neste side i vikarer/i }))
 
-    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(5)
+    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(10)
     expect(within(peoplePanel).getAllByLabelText(/^vikar /i)).toHaveLength(2)
     expect(within(tasksPanel).getByLabelText(/kort ekstrafag 11z/i)).toBeInTheDocument()
     expect(within(peoplePanel).getByLabelText(/vikar ågot øie/i)).toBeInTheDocument()
-    expect(within(tasksPanel).getByText('2 / 2')).toBeInTheDocument()
     expect(within(peoplePanel).getByText('2 / 2')).toBeInTheDocument()
   })
 
-  it('clamps the current page when a side rail shrinks back to one page', async () => {
+  it('clamps the People rail page when it shrinks back to one page', async () => {
     const user = userEvent.setup()
 
     resetPlannerStore(createMultiPageRailState())
     render(<App />)
 
-    const tasksPanel = screen.getByRole('region', { name: 'Uplanlagt' })
+    const peoplePanel = screen.getByRole('region', { name: 'Vikarer' })
 
-    await user.click(within(tasksPanel).getByRole('button', { name: /neste side i uplanlagt/i }))
-    expect(within(tasksPanel).getByText('2 / 2')).toBeInTheDocument()
+    await user.click(within(peoplePanel).getByRole('button', { name: /neste side i vikarer/i }))
+    expect(within(peoplePanel).getByText('2 / 2')).toBeInTheDocument()
 
     act(() => {
       resetPlannerStore(createSinglePageRailState())
     })
 
-    expect(within(tasksPanel).getByText('1 / 1')).toBeInTheDocument()
-    expect(within(tasksPanel).queryByLabelText(/kort ekstrafag 11z/i)).not.toBeInTheDocument()
+    expect(within(peoplePanel).getByText('1 / 1')).toBeInTheDocument()
+    expect(within(peoplePanel).queryByLabelText(/vikar ågot øie/i)).not.toBeInTheDocument()
   })
 
   it('opens need card details with source teacher and assignment explanation', async () => {

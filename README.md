@@ -17,20 +17,22 @@ npm run dev
 
 ```bash
 npm run lint
-npm test
+npm run test
 npm run build
 npm run test:e2e
 ```
 
+Note: `npm run lint` currently reports known existing repo issues. `npm run test`, `npm run build`, and `npm run test:e2e` are the clean verification commands in the current snapshot.
+
 ## Current Product Snapshot
 
 - `Dag` is the main editing and planning surface.
-- `Uke` is an overview and navigation surface.
+- `Uke` is an overview and navigation surface built in the same structured timetable system as the day board.
 - Day view uses a three-area planner shell:
-  - left: `Uplanlagt`
+  - left: `Uplanlagt` as a vertically scrolling single-column list
   - center: `Dagstavle`
-  - right: `Vikarer`
-- Week view uses a timetable grid without the side rails.
+  - right: `Vikarer` as a paged side rail
+- Week view uses a timetable grid without the side rails and ends cleanly at the final visible timeslot.
 
 ## Day View
 
@@ -58,12 +60,16 @@ Week view is a timetable-style overview:
 
 - X axis = Monday to Friday
 - Y axis = the same fixed lesson time blocks used in day view
-- cells show compact mini lesson cards
+- cells use the same quiet timetable presentation language as day view
+- empty cells use a subtle structural marker rather than visible sentence copy
+- `1` mini card uses the full slot width
+- `2` mini cards render as equal side-by-side columns
 - up to `3` mini cards are shown side by side per cell
-- extra lessons collapse into a `+N` overflow indicator
+- extra lessons collapse into a narrower `+N` overflow indicator
 
 Interaction in week view:
 
+- clicking a weekday header opens that day in day view
 - clicking a week cell opens that day in day view
 - clicking a mini card opens the detail sheet without leaving week view
 - the detail sheet offers `Åpne i dagvisning` for deeper editing
@@ -99,8 +105,8 @@ card.explicitAssigneeId ??
 ## Current UI Behavior
 
 - `Uplanlagt` and `Vikarer` are fixed-height side rails in day view.
-- Both side rails page in groups of `5`.
-- Overflow in the side rails is handled by paging, not normal list scrolling.
+- `Uplanlagt` scrolls vertically as a single top-down list in DOM/render order.
+- `Vikarer` pages in groups of `5`.
 - Unscheduled cards show their allocated/original time.
 - The day-view time axis is sticky and occupies a real first grid column.
 - Lane columns use fixed widths and the board scrolls horizontally when needed.
