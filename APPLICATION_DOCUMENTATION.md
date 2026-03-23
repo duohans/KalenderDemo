@@ -1,31 +1,51 @@
 # KalenderDemo Application Documentation
 
-This is the long-form technical documentation for the maintained app in this repository. It is intended to explain how the app works end to end, how the repo is organized around it, and where the important implementation boundaries live.
+This is the long-form technical reference for the maintained app in this repository.
 
-Use this file as the detailed reference. Use `README.md` as the shorter repo entry point.
-This document describes the current `KalenderDemo` application that lives at the repo root.
+Use [README.md](/Users/hans/Documents/GitHub/KalenderDemo/README.md) as the short entry point.
+Use this file when you need the current runtime model, domain invariants, architecture boundaries, or implementation map.
 
 ## 1. What The App Is
 
-KalenderDemo is a browser-only day planner for substitute scheduling.
+KalenderDemo is a browser-only substitute scheduling planner for a single school day.
 
 The operator works in a three-area layout:
 
-- left: unscheduled need cards
-- center: a fixed day-view planning board
-- right: substitute cards with workload summaries
+- left: `Uplanlagt`
+- center: `Dagstavle`
+- right: `Vikarer`
 
-The app is optimized for rapid manual planning:
+The app is optimized for fast manual planning:
 
-- drag lesson cards into the board
-- drag substitutes onto row headers or individual cards
-- open a detail sheet for keyboard-friendly edits
+- drag lesson cards into rows
+- drag substitutes onto rows or individual cards
+- create and remove rows as needed
+- change a lesson's owned time only from the detail sheet
 - undo and redo decisions
 - persist the current planner locally across reloads
 
-There is no backend. Everything is local state plus `localStorage`.
+There is no backend. All state is local plus `localStorage`.
 
-## 2. Product Model
+## 2. Current Workflow Model
+
+The center board is still the primary workspace, but the board no longer behaves like a fixed five-lane planner.
+
+Current board behavior:
+
+- the seed starts with `1` real row
+- below the real rows there is a dedicated `new row` placeholder
+- the placeholder is a row-creation affordance, not a normal schedulable row
+- rows are created explicitly by action or by dropping a need card onto the placeholder
+- rows can also be removed
+
+The side rails are fixed-height rails beside the board:
+
+- `Uplanlagt` shows unscheduled lesson cards
+- `Vikarer` shows substitute cards
+- both rails page in groups of `5`
+- overflow is handled by paging rather than normal in-rail scrolling
+
+## 3. Core Domain Types
 
 The planner uses a normalized data model with four core entity types:
 
@@ -34,7 +54,7 @@ The planner uses a normalized data model with four core entity types:
 - `Substitute`
   A person who can be assigned to a row or directly to a card.
 - `Row`
-  A board lane. A row can optionally have a row-level responsible substitute.
+  A user-managed board lane. A row can optionally have a row-level responsible substitute.
 - `NeedCard`
   A lesson that must be scheduled and optionally assigned a substitute.
 
@@ -47,27 +67,28 @@ Time is fixed to one day with six predefined time blocks:
 - `12:30`
 - `13:30`
 
-The board is column-based by time and row-based by lane.
+Every `NeedCard` now has a stable `allocatedTimeBlockId`. That is the lesson's owned/original time.
 
-## 3. Core Invariants
+## 4. Core Invariants
 
-These rules are central to the app and should be treated as domain invariants, not just UI behavior.
+These rules are domain invariants and should be enforced in the domain layer, not recreated in presentation code.
 
-1. A need card keeps its `sourceTeacherId` forever, even if moved.
-2. A row-level assignee is the default substitute for scheduled cards in that row.
-3. An explicit card-level assignee overrides the row-level assignee.
-4. Effective assignee logic is:
+1. A need card keeps its `sourceTeacherId` forever.
+2. A need card keeps its `allocatedTimeBlockId` as its source-of-truth time.
+3. A row-level assignee is the default substitute for scheduled cards in that row.
+4. An explicit card-level assignee overrides the row-level assignee.
+5. Effective assignee logic is:
 
 ```ts
 effectiveAssigneeId =
   card.explicitAssigneeId ??
-  row.rowResponsibleId ??
+  (card.placement === 'scheduled' ? row.rowResponsibleId : null) ??
   null
 ```
 
-5. A board cell may contain at most one need card.
-6. Rows never auto-merge or auto-split.
-7. Unscheduled cards must have:
+6. A board cell may contain at most one need card.
+7. Rows are user-managed and never auto-created except through the intended row-creation interaction.
+8. Unscheduled cards must have:
 
 ```ts
 placement: 'unscheduled'
@@ -75,7 +96,7 @@ rowId: null
 timeBlockId: null
 ```
 
-8. Scheduled cards must have:
+9. Scheduled cards must have:
 
 ```ts
 placement: 'scheduled'
@@ -83,63 +104,100 @@ rowId: string
 timeBlockId: TimeBlockId
 ```
 
-9. Need-card dragging only moves cards between the unscheduled panel and calendar cells.
-10. Substitute dragging only assigns substitutes to row headers or individual need cards.
+10. For normal scheduling, `timeBlockId` must match `allocatedTimeBlockId`.
+11. Need-card dragging no longer supports free movement across arbitrary time columns.
+12. Substitute dragging only assigns substitutes to row headers or individual need cards.
 
-## 4. Runtime Architecture
+## 5. Scheduling Model
 
-The runtime is intentionally simple:
+The app now distinguishes between a lesson's owned time and its visible placement.
+
+- `allocatedTimeBlockId`
+  The lesson's owned/original time.
+- `rowId + timeBlockId`
+  The current scheduled placement when the card is on the board.
+
+Normal drag-and-drop planning respects the owned time:
+
+- unscheduled card -> existing row header
+  auto-place into that row at `allocatedTimeBlockId`
+- unscheduled card -> new row placeholder
+  create a row and auto-place at `allocatedTimeBlockId`
+- scheduled card -> unscheduled panel
+  allowed
+- arbitrary wrong time cell drop
+  rejected
+
+If the operator wants to change the lesson's actual time, that is not a drag action anymore. It must happen in the detail sheet with explicit confirmation.
+
+## 6. Row Model
+
+Rows are no longer treated as a hard-coded five-row board.
+
+Important behavior:
+
+- the seed starts with `1` actual row
+- row count is controlled by planner actions
+- a dedicated `new row` placeholder always appears after the last real row
+- the placeholder does not render empty time slots
+- rows can be removed
+- removing a row sends its scheduled cards back to `Uplanlagt`
+- remaining rows are reindexed for deterministic ordering
+
+This logic lives in the reducer and DnD resolution, not only in rendering.
+
+## 7. Runtime Architecture
+
+The runtime stays intentionally simple:
 
 1. `src/main.tsx`
-   Loads fonts, imports global CSS, and mounts React in `StrictMode`.
+   Loads fonts, imports global CSS, and mounts React.
 2. `src/app/App.tsx`
-   Renders `PlannerPage` directly.
+   Renders `PlannerPage`.
 3. `src/store/plannerStore.ts`
    Creates the Zustand store, loads persisted state, and owns undo, redo, and selection state.
 4. `src/features/schedule/useSchedule.ts`
-   Exposes feature-facing hooks so runtime components do not need to import raw store internals.
+   Exposes feature-facing hooks so components do not depend on raw store internals.
 5. `src/features/layout/PlannerPage.tsx`
-   Composes the full UI, owns drag orchestration, and mounts the detail sheet.
+   Composes the shell, DnD context, rails, board, and detail sheet.
 
-There is no provider-based app shell such as `ScheduleProvider` in the current architecture.
+There is no backend service, routing layer, or remote sync model in the current architecture.
 
-## 5. Directory Overview
+## 8. Directory Overview
 
-The repo is organized around a small set of docs, configs, and runtime entrypoints:
+### Top-level docs and config
 
 - `APPLICATION_DOCUMENTATION.md`
-  The long-form technical reference for the root app.
+  This detailed reference.
 - `README.md`
-  The short project overview and run/verify instructions.
+  Short repo and product overview.
 - `package.json`
-  NPM scripts and dependency declarations.
+  Scripts and dependency declarations.
 - `vite.config.ts`
-  Vite config plus Vitest setup and test exclusions.
+  Vite config and Vitest setup.
 - `playwright.config.ts`
-  End-to-end test runner config for the root app.
+  End-to-end test config.
 - `eslint.config.js`
-  Lint configuration and global ignores.
-- `.gitignore`
-  Generated-artifact and local-tooling ignores for the root app.
+  Lint configuration.
 
 ### `src/domain/schedule/`
 
-This folder contains the planner's domain logic:
+The planner domain lives here:
 
 - `types.ts`
-  Canonical types and action definitions.
+  Canonical types and reducer action definitions.
 - `constants.ts`
   Storage key, storage version, and fixed time blocks.
 - `schema.ts`
   Zod validation for persisted planner documents.
 - `seed.ts`
-  The seeded planner state used for first load and fallback.
+  Seeded planner state used for first load and fallback.
 - `storage.ts`
-  The concrete persistence layer.
+  Persistence and migration logic.
 - `reducer.ts`
-  The only mutation layer for planner state.
+  The only mutation layer for planner data.
 - `selectors.ts`
-  The main derivation layer for view models and planning summaries.
+  Derived view models, summaries, and validation helpers.
 - `dnd.ts`
   Drag item typing, target typing, collision filtering, and drop resolution.
 
@@ -151,23 +209,21 @@ This folder contains the planner's domain logic:
 ### `src/features/`
 
 - `layout/`
-  Top-level shell and detail sheet.
+  App shell and detail sheet.
 - `calendar/`
-  Board rendering, row headers, cells, and headers.
+  Board rendering, row headers, cells, and the new-row placeholder.
 - `tasks/`
-  Unscheduled panel.
+  `Uplanlagt` rail.
 - `people/`
-  Substitute panel.
+  `Vikarer` rail.
 - `shared/`
-  Reusable card and panel primitives.
+  Cards, badges, panel wrappers, overlay, and pager primitives.
 - `motion/`
-  Drag feedback context, timers, and animation helpers.
+  Timed feedback and live-announcement helpers.
 - `schedule/`
   Feature-facing hooks wrapping the store.
 
 ### `src/styles/`
-
-The styling system is split by responsibility:
 
 - `tokens.css`
 - `layout.css`
@@ -175,11 +231,11 @@ The styling system is split by responsibility:
 - `components.css`
 - `responsive.css`
 
-## 6. State Shape
+## 9. State Shape
 
-The source of truth is `PlannerState` from `src/domain/schedule/types.ts`.
+The source of truth is `PlannerState` from [src/domain/schedule/types.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/domain/schedule/types.ts).
 
-Conceptually it looks like this:
+Conceptually:
 
 ```ts
 type PlannerState = {
@@ -195,69 +251,62 @@ type PlannerState = {
 }
 ```
 
-The app keeps entities normalized and stores ordering separately so UI rendering stays deterministic.
+Entities are normalized and order is stored separately so rendering remains deterministic.
 
-## 7. Seed Data And Persistence
+## 10. Seed Data And Persistence
 
 ### Seed Data
 
-`src/domain/schedule/seed.ts` exports `createSeedPlannerState()`.
+[src/domain/schedule/seed.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/domain/schedule/seed.ts) exports `createSeedPlannerState()`.
 
-This seeded document is the default planner used when:
-
-- the app is opened for the first time
-- there is no saved state
-- persisted state is malformed
-- persisted state fails schema validation
-
-The seed includes:
+Current seed behavior:
 
 - multiple teachers
 - multiple substitutes
-- five rows
+- `1` initial row
 - a mix of scheduled and unscheduled need cards
-- examples of row assignments and explicit card overrides
+- examples of row assignments and direct card overrides
+- every need card already includes `allocatedTimeBlockId`
 
-The seed is not just demo content. It is also part of the app's fallback behavior and test determinism.
+The seed is both demo content and fallback behavior.
 
 ### Storage
 
-`src/domain/schedule/storage.ts` is the concrete persistence layer.
+[src/domain/schedule/storage.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/domain/schedule/storage.ts) is the persistence layer.
 
 Important behavior:
 
 - storage key: `substitute-planner:v2`
-- documents must match `STORAGE_VERSION = 3`
-- persisted JSON is parsed and validated through Zod
+- current schema version: `4`
+- version `3` documents are migrated by backfilling `allocatedTimeBlockId`
+- persisted JSON is validated through Zod
 - invalid data falls back to seed state
 
-The persistence layer exports:
+Exports:
 
 - `loadPlannerState()`
 - `savePlannerState(state)`
 - `migrateStoredPlannerState(value)`
 
-Despite the migration-oriented name, `migrateStoredPlannerState` currently acts as a validation gate and returns `null` for incompatible input.
+## 11. Store And History Model
 
-## 8. Store And History Model
-
-`src/store/plannerStore.ts` wraps the domain state in a Zustand store with additional UI concerns.
+[src/store/plannerStore.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/store/plannerStore.ts) wraps planner data in a Zustand store with additional UI concerns.
 
 The store owns:
 
-- current `state`
+- current planner `state`
 - current `selection`
-- history `past` stack
-- history `future` stack
-- derived booleans `canUndo` and `canRedo`
+- history `past`
+- history `future`
+- derived `canUndo` and `canRedo`
 
 ### Dispatch flow
 
 When `dispatch(action)` is called:
 
-1. the current state is read from the store
+1. the current state is read
 2. `plannerReducer` computes `nextState`
-3. if nothing changed, the function returns early
+3. unchanged state returns early
 4. the previous state is pushed onto `past`
 5. `future` is cleared
 6. the next state is persisted
@@ -265,42 +314,28 @@ When `dispatch(action)` is called:
 
 ### Undo and redo
 
-- `undo()` moves one snapshot from `past` back into `state` and pushes the old state into `future`
-- `redo()` takes the first snapshot from `future` and restores it
-- both operations save the restored state back to `localStorage`
+- `undo()` restores one snapshot from `past`
+- `redo()` restores one snapshot from `future`
+- both persist the restored state back to `localStorage`
 
 ### Selection
 
-Selection is separate from planner data. It exists to drive the detail sheet.
+Selection is stored separately from planner data and drives the detail sheet.
 
-Possible selection kinds:
+Supported selections:
 
 - row selection
 - need-card selection
 
-Selection is opened and closed through store actions, and some features also use direct store helpers such as `openSelection()` and `closeSelection()`.
+## 12. Domain Mutation Layer
 
-## 9. Feature-Facing Hook Layer
-
-`src/features/schedule/useSchedule.ts` is the public facade used by runtime UI code.
-
-It exposes:
-
-- `useSchedule()`
-- `useScheduleState(selector)`
-- `useScheduleDispatch()`
-- `useScheduleSelection()`
-- `useScheduleSelectionActions()`
-- `useScheduleHistoryActions()`
-
-This layer exists so feature components depend on a schedule-oriented API rather than directly on low-level store implementation details.
-
-## 10. Domain Mutation Layer
-
-`src/domain/schedule/reducer.ts` is the only place where planner state changes.
+[src/domain/schedule/reducer.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/domain/schedule/reducer.ts) is the only place where planner data changes.
 
 Supported actions are:
 
+- `createRow`
+- `removeRow`
+- `updateNeedCardAllocatedTimeBlock`
 - `moveNeedCardToCell`
 - `moveNeedCardToUnscheduled`
 - `assignSubstituteToRow`
@@ -308,111 +343,91 @@ Supported actions are:
 - `assignSubstituteToNeedCard`
 - `clearNeedCardExplicitAssignee`
 
-Important behavior guaranteed by the reducer:
+Important reducer guarantees:
 
 - collisions are prevented
-- card identity stays stable
-- moving a card does not rewrite teacher identity
-- row assignments do not erase explicit card overrides
-- clearing a row assignee only changes cards that were inheriting from that row
+- wrong-time placement is rejected
+- row removal unschedules cards from that row
+- moving a card never rewrites teacher identity
+- row assignments do not erase explicit overrides
+- clearing a row assignee only affects cards that were inheriting from that row
+- allocated-time changes revalidate placement immediately
 
-If a feature needs a new planner mutation, it should be expressed as a reducer action rather than encoded inside a UI component.
+If a feature needs a new planner mutation, it should be expressed here rather than embedded inside a React component.
 
-## 11. Selector Layer
+## 13. Selector Layer
 
-`src/domain/schedule/selectors.ts` is the main derivation layer for the UI.
+[src/domain/schedule/selectors.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/domain/schedule/selectors.ts) is the main derivation layer for UI and validation.
 
-This file does much more than simple lookups. It contains:
+It contains more than lookups:
 
 - row title generation
-- card title splitting
 - scheduled-card indexing
 - collision tracking
 - effective assignee derivation
-- summary metrics
+- planner summary metrics
 - substitute workload derivation
-- board-specific view models
+- board view models
+- need-card display models
+- row-level placement validation
 
 ### Caching strategy
 
 The file uses `WeakMap` caches keyed by `PlannerState` instance.
 
-This matters because:
+That means:
 
-- selectors remain pure from the caller's point of view
-- expensive derivations are reused per immutable state snapshot
-- undo and redo naturally invalidate caches by switching state references
+- selectors stay pure from the caller's point of view
+- expensive derivations are reused per immutable snapshot
+- undo/redo naturally invalidate caches by switching state references
 
-### Key selector families
+### Important selector families
 
-#### Structural selectors
+Structural selectors:
 
 - `selectScheduledNeedCards`
 - `selectUnscheduledNeedCardIds`
 - `selectCellNeedCardIdMap`
 - `selectRowCards`
 
-These derive the board structure.
-
-#### Identity selectors
+Identity selectors:
 
 - `selectTeacherById`
 - `selectSubstituteById`
-- `selectRow`
-
-These resolve normalized entities.
-
-#### View-model selectors
-
 - `selectRowTitle`
+
+Validation selectors:
+
+- `selectCanDropNeedCardInCell`
+- `selectCanDropNeedCardInRow`
+- `selectCanPlaceNeedCardInCell`
+
+View-model selectors:
+
 - `selectRowDisplayModel`
 - `selectNeedCardDisplayModel`
 - `selectPlannerSummary`
 - `selectSubstituteWorkloads`
 
-These are what most components actually care about.
+### Need-card display model
 
-### Row title rules
-
-Row titles are fully derived.
-
-- If a row has a responsible substitute:
-  the title becomes `"{FirstName}s vikartimer"`
-- If a row has no responsible substitute:
-  the title is inferred from the teachers currently represented in that row
-
-The selector also returns both `full` and `compact` forms.
-
-### Need card display model
-
-`selectNeedCardDisplayModel` resolves the data needed to render a single card, including:
+`selectNeedCardDisplayModel` resolves the data needed to render a lesson card, including:
 
 - teacher
 - effective assignee
+- status assignee
 - assignment mode
 - conflict status
 - split subject/class labels
 - derived accents
-- a human-readable status label
+- allocated time label
+- status label and detail text
 
-This keeps rendering components mostly presentation-focused.
+This keeps `TaskCard`, `NeedCardVisual`, and `AssigneeBadge` presentation-focused.
 
-### Planner summary
+## 14. Drag And Drop Model
 
-`selectPlannerSummary` drives the compact top-row chips and other overview data. It derives:
-
-- total cards
-- scheduled and unscheduled counts
-- explicit overrides
-- inherited assignments
-- covered cards
-- coverage rate
-- unassigned items
-- substitute count
-
-## 12. Drag And Drop Model
-
-Drag and drop is defined in `src/domain/schedule/dnd.ts` and orchestrated in `PlannerPage.tsx`.
+Drag and drop is defined in [src/domain/schedule/dnd.ts](/Users/hans/Documents/GitHub/KalenderDemo/src/domain/schedule/dnd.ts) and orchestrated in [src/features/layout/PlannerPage.tsx](/Users/hans/Documents/GitHub/KalenderDemo/src/features/layout/PlannerPage.tsx).
 
 ### Drag item types
 
@@ -424,32 +439,32 @@ Drag and drop is defined in `src/domain/schedule/dnd.ts` and orchestrated in `Pl
 - `unscheduled-panel`
 - `calendar-cell`
 - `row-header`
+- `new-row-placeholder`
 - `need-card`
+
+### Current need-card semantics
+
+- need card -> `unscheduled-panel`
+  `moveNeedCardToUnscheduled`
+- need card -> `calendar-cell`
+  only valid if row/time is allowed for that card
+- need card -> `row-header`
+  auto-place into that row at `allocatedTimeBlockId`
+- need card -> `new-row-placeholder`
+  `createRow` with auto-placement
+
+### Current substitute semantics
+
+- substitute -> `row-header`
+  `assignSubstituteToRow`
+- substitute -> `need-card`
+  `assignSubstituteToNeedCard`
 
 ### Collision filtering
 
-`plannerCollisionDetection` filters the available droppable containers based on the active drag type before it falls back to pointer or rectangle intersection logic.
+`plannerCollisionDetection` filters droppable containers by active drag type before falling back to pointer or rectangle intersection logic. This prevents irrelevant targets from competing during drag.
 
-This prevents irrelevant targets from competing during drag interactions.
-
-### Drop resolution
-
-`resolveDrop(state, activeItem, target)` converts a valid drag/drop combination into a reducer action.
-
-Examples:
-
-- need card -> unscheduled panel
-  `moveNeedCardToUnscheduled`
-- need card -> calendar cell
-  `moveNeedCardToCell`
-- substitute -> row header
-  `assignSubstituteToRow`
-- substitute -> need card
-  `assignSubstituteToNeedCard`
-
-This keeps drag semantics in the domain layer instead of scattering them across components.
-
-## 13. Main UI Composition
+## 15. Main UI Composition
 
 ### `PlannerPage.tsx`
 
@@ -461,61 +476,63 @@ It owns:
 - pointer sensor setup
 - drag lifecycle handlers
 - drag overlay setup
-- drag feedback provider wiring
-- undo and redo controls
+- feedback provider wiring
+- undo/redo controls
 - keyboard shortcut handling
 - summary chips
 - board date label
 - live-region announcements
 
-It does not directly render individual cells or card visuals. It composes the main feature surfaces and routes drag events into reducer actions.
-
-### Tasks panel
-
-`src/features/tasks/TasksPanel.tsx` renders the unscheduled panel.
+### `TasksPanel.tsx`
 
 Responsibilities:
 
-- compute unscheduled card IDs
+- derive unscheduled card IDs
 - register the unscheduled dropzone
-- render empty-state treatment when nothing is left
+- page unscheduled cards in groups of `5`
 - render unscheduled cards using `TaskCard`
+- expose a fixed footer pager
 
-### Calendar board
+### `CalendarGrid.tsx`
 
-The board lives in `src/features/calendar/`.
+Responsibilities:
 
-Key responsibilities:
+- render the board shell and chips
+- render the row loop from `rowOrder`
+- render the trailing `new row` placeholder
 
-- `CalendarGrid.tsx`
-  renders the board shell, board chips, and row loop
-- `RowLane.tsx`
-  renders one full row
-- `RowHeaderDropZone.tsx`
-  renders the row header and row-level substitute target
-- `CalendarCell.tsx`
-  renders each time cell and card slot
-- `TimeHeader.tsx`
-  renders the fixed time labels
-- `EmptyCellState.tsx`
-  renders unoccupied cells
+### `RowLane.tsx`
 
-### People panel
+Renders one full row:
 
-`src/features/people/PeoplePanel.tsx` renders substitutes as drag sources.
+- row header
+- one cell per time block
 
-Each substitute card shows:
+### `RowHeaderDropZone.tsx`
 
-- identity
-- effective workload count
-- row-assignment count
-- explicit override count
+Renders the row card itself and supports:
 
-## 14. Detail Sheet
+- row selection
+- row-level substitute drops
+- need-card auto-placement by row drop
+- inline row-responsible clearing
+- inline row removal
 
-`src/features/layout/PlannerDetailSheet.tsx` is the keyboard-friendly editing surface.
+### `CalendarCell.tsx`
 
-It uses the current store selection and branches into two modes:
+Renders each time cell, scheduled card slot, or empty state.
+
+### `PeoplePanel.tsx`
+
+Renders substitute drag sources in groups of `5` per page.
+
+Current substitute cards are person-first rather than stat-heavy.
+
+## 16. Detail Sheet
+
+[src/features/layout/PlannerDetailSheet.tsx](/Users/hans/Documents/GitHub/KalenderDemo/src/features/layout/PlannerDetailSheet.tsx) is the keyboard-friendly editing surface.
+
+It branches into:
 
 - row detail mode
 - need-card detail mode
@@ -529,15 +546,17 @@ The sheet shows:
 - subject
 - room
 - current placement
+- owned/original time
 - current assignee explanation
 
 The operator can:
 
-- move the card to another row/time
-- send it back to the unscheduled panel
+- send the card to `Uplanlagt`
+- place it onto another row at its current allocated time
+- change the allocated time through a separate confirmed action
 - assign or clear a direct substitute override
 
-Placement controls use selector-derived validation so the sheet prevents saving to an occupied cell.
+Time changes are explicitly separated from normal placement and require confirmation.
 
 ### Row mode
 
@@ -545,74 +564,71 @@ The row view shows:
 
 - row title
 - row assignee
-- teachers represented in the row
 - cards currently in the row
 
 The operator can:
 
 - assign a row-level substitute
-- clear the current row assignee
+- clear the row assignee
+- remove the row
 
 ### Focus handling
 
-The sheet includes focus management and escape/close behavior so it works as an accessible modal workflow rather than a purely visual side panel.
+The sheet is a real dialog with focus trapping, escape-to-close behavior, and focus restoration.
 
-## 15. Shared UI Primitives
+## 17. Shared UI Primitives
 
-The shared components folder contains reusable UI pieces that keep board, panel, and overlay rendering consistent.
-
-Important pieces:
+Important shared components:
 
 - `TaskCard`
-  the main lesson card used in the board, unscheduled panel, detail sheet, and overlay variants
-- `PersonCard`
-  the substitute drag source card
-- `DragOverlayCard`
-  the floating drag preview
+  Main lesson card used in the board, left rail, and overlay.
 - `NeedCardVisual`
-  shared lesson-card visual body
+  Shared lesson-card visual body.
 - `AssigneeBadge`
-  reusable assignment status badge
+  Shared assignment status badge.
+- `PersonCard`
+  Substitute drag source card.
+- `DragOverlayCard`
+  Static drag preview.
 - `PanelFrame`
-  shell wrapper for side panels
+  Fixed-height side rail shell.
+- `SideRailPager`
+  Previous/next paging controls for the side rails.
 
-These components mostly consume selector-derived data instead of implementing planner rules themselves.
+These components consume selector-derived data rather than implementing planner rules.
 
-## 16. Motion And Feedback
+## 18. Motion And Feedback
 
-The app uses Framer Motion for interaction feedback rather than for route or page animation.
+The app no longer has a UI animation layer.
 
-Motion-related files:
+`src/features/motion/` now exists for timed feedback and screen-reader announcements:
 
-- `src/features/motion/PlannerDragFeedbackContext.tsx`
-- `src/features/motion/useDragFeedbackTimers.ts`
-- `src/features/motion/plannerMotion.ts`
+- `PlannerDragFeedbackContext.tsx`
+  typed feedback events
+- `useDragFeedbackTimers.ts`
+  short-lived accepted/rejected feedback state
 
-This subsystem handles:
+Current behavior:
 
-- drop handoff animation timing
-- accepted-drop highlighting
-- rejected-drop feedback
-- overlay movement
-- reduced-motion support
-- screen-reader announcement content
+- drag/drop feedback is immediate
+- overlay rendering is static
+- state changes are not animated
+- accepted actions and rejected drops still produce live-region announcements
 
-`PlannerPage.tsx` converts reducer actions into motion events so the UI can acknowledge what happened without duplicating business logic.
-
-## 17. Styling System
+## 19. Styling System
 
 The app uses a CSS-first styling setup imported through `src/index.css`.
 
 ### Styling layers
 
 - `tokens.css`
-  colors, radii, typography, spacing primitives, board dimensions, and focus tokens
+  colors, radii, typography, spacing primitives, board dimensions, and rail sizing tokens
 - `layout.css`
-  shell layout, full-viewport structure, board growth rules, side-panel sizing
+  shell layout, full-viewport structure, panel containment, and pager layout
 - `calendar.css`
-  board-specific structure and lane geometry
+  board-specific structure, row geometry, cells, and row cards
 - `components.css`
-  cards, buttons, sheet styling, and component-level surfaces
+  lesson cards, substitute cards, buttons, badges, and detail-sheet styling
 - `responsive.css`
   breakpoint-specific layout adjustments
 
@@ -622,30 +638,31 @@ The current design language is:
 
 - warm cream and sand backgrounds
 - sage, clay, and muted accent colors
-- Fraunces for headings
-- Manrope for body text
-- softer panel surfaces and borders
-- minimal decorative shell text
+- Fraunces for high-level headings only
+- Manrope for operational UI text
+- calmer cards and rails
 - board-first space allocation
 
-## 18. Accessibility Model
+## 20. Accessibility Model
 
-The UI uses accessible names and regions as part of its structure, not just for testing.
+The UI uses accessible names and regions as part of its structure, not only for testing.
 
 Important patterns:
 
-- the main work areas are exposed as named regions:
-  `Uplanlagt`, `Dagstavle`, and `Vikarer`
-- cards and row controls use explicit button labels
-- planner actions announce results in a polite live region
-- keyboard shortcuts avoid stealing input focus from form controls
-- the detail sheet is exposed as a dialog with focus handling
+- named regions:
+  - `Uplanlagt`
+  - `Dagstavle`
+  - `Vikarer`
+- explicit labels on cards, row controls, and pagers
+- polite live-region announcements for accepted actions and rejected drops
+- keyboard shortcuts that avoid stealing focus from editable form controls
+- dialog semantics and focus handling in the detail sheet
 
-The visible UI is intentionally compact, so some semantics are present primarily through accessible names rather than visible headings.
+Some semantics are intentionally carried by accessible names because the visible UI is compact.
 
-## 19. Testing Strategy
+## 21. Testing Strategy
 
-The project has three main verification layers.
+The project has three verification layers.
 
 ### Domain unit tests
 
@@ -654,48 +671,42 @@ Located under `src/domain/schedule/*.test.ts`.
 They cover:
 
 - reducer rules
-- drag/drop resolution rules
-- schema validation
+- drag/drop resolution
 - selector behavior
-- storage behavior
-
-These tests protect the product model directly.
-
-Vitest is configured in `vite.config.ts` with:
-
-- `jsdom` as the test environment
-- `src/test/setup.ts` as the shared setup file
-- exclusions for `e2e/**`, `playwright.config.ts`, and `.claude/**`
+- schema validation
+- storage migration and loading
 
 ### App integration tests
 
-`src/app/App.test.tsx` renders the whole app in JSDOM and tests:
+[src/app/App.test.tsx](/Users/hans/Documents/GitHub/KalenderDemo/src/app/App.test.tsx) renders the app in JSDOM and covers:
 
-- compact shell structure
-- detail sheet flows
+- shell structure
+- row creation and removal
+- side-rail paging
+- detail-sheet flows
 - inline clear actions
-- undo and redo behavior
-- movement of unscheduled cards through the sheet
-
-These tests rely on `resetPlannerStore()` to isolate the Zustand store between tests.
+- undo/redo behavior
 
 ### End-to-end tests
 
-`e2e/planner.spec.ts` covers:
+[e2e/planner.spec.ts](/Users/hans/Documents/GitHub/KalenderDemo/e2e/planner.spec.ts) covers:
 
-- dragging an unscheduled card into the board
-- moving a card through the detail sheet and persisting it
-- moving a card through the detail sheet and undoing it
+- row-header auto-placement
+- new-row placeholder creation
+- wrong-time drop rejection
+- fixed side-rail paging
+- board drop-slot coverage
+- footer containment
+- detail-sheet time-change confirmation
+- persistence and undo flows
 
-`playwright.config.ts` runs these tests against a fresh preview server on `127.0.0.1:4174` instead of a reused Vite dev server. Each E2E test clears `localStorage` before reloading so the seed state is deterministic.
+[playwright.config.ts](/Users/hans/Documents/GitHub/KalenderDemo/playwright.config.ts) runs E2E against a fresh preview server on `127.0.0.1:4174`.
 
-This is important because earlier reuse of a long-lived Vite dev server could produce stale optimized dependency responses. The preview-server setup keeps E2E runs deterministic and closer to production output.
-
-## 20. Tooling And Repo Hygiene
+## 22. Tooling And Repo Hygiene
 
 ### Package scripts
 
-The root app uses these main scripts from `package.json`:
+Main scripts from [package.json](/Users/hans/Documents/GitHub/KalenderDemo/package.json):
 
 - `npm run dev`
 - `npm run build`
@@ -704,95 +715,43 @@ The root app uses these main scripts from `package.json`:
 - `npm run lint`
 - `npm run preview`
 
-### Linting
+### Dependencies
 
-`eslint.config.js` applies TypeScript, React Hooks, and React Refresh rules to the root app and globally ignores:
+Important runtime dependencies:
 
-- `dist`
-- `test-results`
-- `playwright-report`
-- `.claude`
+- React
+- Zustand
+- Zod
+- `@dnd-kit/core`
+- `@dnd-kit/utilities`
+- `lucide-react`
+- `@fontsource/fraunces`
+- `@fontsource/manrope`
 
 ### Local generated files
 
-`.gitignore` excludes the normal generated and local-only artifacts used by the root app, including:
+Normal generated artifacts are ignored, including:
 
 - `dist`
 - `test-results`
 - `playwright-report`
-- `.claude`
 
-These are treated as disposable outputs rather than source content.
+## 23. Implementation Boundaries
 
-## 21. Common Interaction Flows
+When changing the app, these boundaries are intentional:
 
-### Moving an unscheduled card into the board
+- planner rules belong in the domain layer
+- view-model shaping belongs in selectors
+- state mutation belongs in the reducer
+- detail-sheet workflows should dispatch domain actions rather than mutate locally
+- presentation components should stay focused on layout and interaction wiring
 
-1. The user drags a card from the unscheduled panel.
-2. `TaskCard` provides the drag item.
-3. `PlannerPage` receives drag events from `DndContext`.
-4. `resolveDrop` converts the drop into `moveNeedCardToCell`.
-5. The store dispatches the action through the reducer.
-6. The new state is persisted and the board re-renders.
+If new planner behavior is added, prefer:
 
-### Assigning a substitute to a row
+1. domain types
+2. reducer action
+3. selector/view-model updates
+4. DnD resolution changes if relevant
+5. component updates last
 
-1. The user drags a substitute from the right panel.
-2. The row header is exposed as a valid substitute target.
-3. `resolveDrop` returns `assignSubstituteToRow`.
-4. The reducer stores `rowResponsibleId`.
-5. Cards in that row inherit the substitute unless they already have explicit overrides.
-
-### Assigning a substitute directly to a card
-
-1. The user drags a substitute onto a need card.
-2. The card becomes a `need-card` drop target.
-3. `resolveDrop` returns `assignSubstituteToNeedCard`.
-4. The reducer stores `explicitAssigneeId`.
-5. The card now shows explicit assignment state.
-
-### Editing through the detail sheet
-
-1. The user opens a card or row selection.
-2. The detail sheet reads the selection from the store.
-3. Form controls are populated from selectors and current state.
-4. Save actions dispatch normal reducer actions.
-5. The sheet itself does not bypass domain logic.
-
-## 22. Safe Ways To Extend The App
-
-When adding features, keep responsibilities in the same layers:
-
-- add new raw state shapes in `types.ts`
-- add validation in `schema.ts`
-- seed realistic examples in `seed.ts`
-- add mutations in `reducer.ts`
-- add derived UI behavior in `selectors.ts`
-- update `dnd.ts` only if drag semantics actually change
-- keep feature components thin and selector-driven
-
-Good changes:
-
-- new summary chips backed by selectors
-- new detail-sheet controls backed by reducer actions
-- new presentational fields in row or card view models
-
-Risky changes:
-
-- putting mutation logic inside UI components
-- deriving important business rules only in JSX
-- introducing hidden state outside the store
-- changing persistence shape without schema updates
-
-## 23. Key Takeaways
-
-The app is small, but it is intentionally layered:
-
-- domain files define truth
-- the store wraps truth with history and selection
-- schedule hooks expose that state to features
-- components render selector-driven view models
-- drag/drop maps interactions back into reducer actions
-- persistence is local, validated, and deterministic
-
-If you understand the relationship between `reducer.ts`, `selectors.ts`, `plannerStore.ts`, `PlannerPage.tsx`, and `PlannerDetailSheet.tsx`, you understand almost the entire app.
+That ordering reflects how the current app is structured today.
