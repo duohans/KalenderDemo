@@ -26,6 +26,9 @@ export function NeedCardVisual({
   const hasConflict = displayModel?.hasConflict ?? true
   const teacher = displayModel?.teacher
   const roomLabel = card.subtitle.trim() || 'Rom ikke satt'
+  const showAllocatedTime =
+    card.placement === 'unscheduled' &&
+    (variant === 'panel' || variant === 'overlay' || variant === 'detail')
 
   return (
     <article
@@ -71,6 +74,11 @@ export function NeedCardVisual({
         <h3 className="need-card__subject" title={displayModel?.subjectLabel ?? card.title}>
           {displayModel?.subjectLabel ?? card.title}
         </h3>
+        {showAllocatedTime ? (
+          <p className="need-card__time" title={displayModel?.allocatedTimeLabel}>
+            {displayModel?.allocatedTimeLabel ?? 'Uten tidspunkt'}
+          </p>
+        ) : null}
         <p className="need-card__room" title={roomLabel}>
           {roomLabel}
         </p>

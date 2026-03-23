@@ -6,7 +6,10 @@ import {
   type Over,
 } from '@dnd-kit/core'
 
-import { selectCanDropNeedCardInCell } from './selectors.ts'
+import {
+  selectCanDropNeedCardInCell,
+  selectCanDropNeedCardInRow,
+} from './selectors.ts'
 import type { NeedCard, PlannerAction, PlannerState, TimeBlockId } from './types.ts'
 
 export type PlannerNeedCardDragItem = {
@@ -29,6 +32,7 @@ export type PlannerDropTarget =
   | { type: 'unscheduled-panel' }
   | { type: 'calendar-cell'; rowId: string; timeBlockId: TimeBlockId }
   | { type: 'row-header'; rowId: string }
+  | { type: 'new-row-placeholder' }
   | { type: 'need-card'; cardId: string }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -83,6 +87,8 @@ export function isPlannerDropTarget(value: unknown): value is PlannerDropTarget 
       return typeof value.rowId === 'string' && typeof value.timeBlockId === 'string'
     case 'row-header':
       return typeof value.rowId === 'string'
+    case 'new-row-placeholder':
+      return true
     case 'need-card':
       return typeof value.cardId === 'string'
     default:
@@ -115,7 +121,12 @@ export const plannerCollisionDetection: CollisionDetection = (args) => {
     }
 
     if (activeItem.type === 'need-card') {
-      return current.type === 'unscheduled-panel' || current.type === 'calendar-cell'
+      return (
+        current.type === 'unscheduled-panel' ||
+        current.type === 'calendar-cell' ||
+        current.type === 'row-header' ||
+        current.type === 'new-row-placeholder'
+      )
     }
 
     return current.type === 'row-header' || current.type === 'need-card'
@@ -144,6 +155,14 @@ export function canDropOnTarget(
         target.rowId,
         target.timeBlockId,
       )
+    }
+
+    if (target.type === 'row-header') {
+      return selectCanDropNeedCardInRow(state, activeItem.cardId, target.rowId)
+    }
+
+    if (target.type === 'new-row-placeholder') {
+      return Boolean(state.needCards[activeItem.cardId])
     }
 
     return false
@@ -187,6 +206,28 @@ export function resolveDrop(
         cardId: activeItem.cardId,
         rowId: target.rowId,
         timeBlockId: target.timeBlockId,
+      }
+    }
+
+    if (target.type === 'row-header') {
+      const card = state.needCards[activeItem.cardId]
+
+      if (!card) {
+        return null
+      }
+
+      return {
+        type: 'moveNeedCardToCell',
+        cardId: activeItem.cardId,
+        rowId: target.rowId,
+        timeBlockId: card.allocatedTimeBlockId,
+      }
+    }
+
+    if (target.type === 'new-row-placeholder') {
+      return {
+        type: 'createRow',
+        cardId: activeItem.cardId,
       }
     }
 

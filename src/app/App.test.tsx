@@ -14,6 +14,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 10X',
     subtitle: 'Rom 410',
     sourceTeacherId: 'teacher-petter',
+    allocatedTimeBlockId: '08:30',
     placement: 'unscheduled',
     rowId: null,
     timeBlockId: null,
@@ -25,6 +26,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 11Z',
     subtitle: 'Rom 411',
     sourceTeacherId: 'teacher-line',
+    allocatedTimeBlockId: '09:30',
     placement: 'unscheduled',
     rowId: null,
     timeBlockId: null,
@@ -36,6 +38,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 12Y',
     subtitle: 'Rom 412',
     sourceTeacherId: 'teacher-camilla',
+    allocatedTimeBlockId: '11:30',
     placement: 'unscheduled',
     rowId: null,
     timeBlockId: null,
@@ -61,6 +64,18 @@ function createMultiPageRailState() {
   return state
 }
 
+function createSinglePageRailState() {
+  const state = createSeedPlannerState()
+
+  delete state.needCards['card-kroppsoving-4b']
+  delete state.needCards['card-mat-og-helse-6c']
+  state.needCardOrder = state.needCardOrder.filter(
+    (cardId) => cardId !== 'card-kroppsoving-4b' && cardId !== 'card-mat-og-helse-6c',
+  )
+
+  return state
+}
+
 afterEach(() => {
   cleanup()
   window.localStorage.clear()
@@ -80,7 +95,7 @@ describe('App', () => {
     expect(screen.getByText('6 udekket')).toBeInTheDocument()
     expect(screen.getByText('50% dekning')).toBeInTheDocument()
     expect(screen.getByText('5 vikarer')).toBeInTheDocument()
-    expect(screen.getByText('5 rader')).toBeInTheDocument()
+    expect(screen.getByText('1 rad')).toBeInTheDocument()
     expect(screen.queryByText('Substituttavle')).not.toBeInTheDocument()
     expect(
       screen.queryByText('Planlegg dagens vikarer med tydelig dekning og raske overstyringer.'),
@@ -95,7 +110,8 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Dagstavle' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Vikarer' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })).toBeInTheDocument()
-    expect(within(tasksPanel).getByText('1 / 1')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /opprett ny rad/i })).toBeInTheDocument()
+    expect(within(tasksPanel).getByText('1 / 2')).toBeInTheDocument()
     expect(within(peoplePanel).getByText('1 / 1')).toBeInTheDocument()
 
     const rowButton = screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i })
@@ -124,7 +140,7 @@ describe('App', () => {
     await user.click(within(tasksPanel).getByRole('button', { name: /neste side i uplanlagt/i }))
     await user.click(within(peoplePanel).getByRole('button', { name: /neste side i vikarer/i }))
 
-    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(2)
+    expect(within(tasksPanel).getAllByLabelText(/^kort /i)).toHaveLength(5)
     expect(within(peoplePanel).getAllByLabelText(/^vikar /i)).toHaveLength(2)
     expect(within(tasksPanel).getByLabelText(/kort ekstrafag 11z/i)).toBeInTheDocument()
     expect(within(peoplePanel).getByLabelText(/vikar ågot øie/i)).toBeInTheDocument()
@@ -144,7 +160,7 @@ describe('App', () => {
     expect(within(tasksPanel).getByText('2 / 2')).toBeInTheDocument()
 
     act(() => {
-      resetPlannerStore(createSeedPlannerState())
+      resetPlannerStore(createSinglePageRailState())
     })
 
     expect(within(tasksPanel).getByText('1 / 1')).toBeInTheDocument()
@@ -171,13 +187,13 @@ describe('App', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /åpne detaljer for idas vikartimer/i }))
+    await user.click(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i }))
 
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByRole('heading', { name: 'Idas vikartimer' })).toBeInTheDocument()
-    expect(within(dialog).getByText('Ida Mohn')).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Kaspers vikartimer' })).toBeInTheDocument()
+    expect(within(dialog).getByText('Kasper Dahl')).toBeInTheDocument()
     expect(within(dialog).getByText('Kunst og håndverk')).toBeInTheDocument()
-    expect(within(dialog).getByText('Matematikk')).toBeInTheDocument()
+    expect(within(dialog).getAllByText('Matematikk').length).toBeGreaterThan(0)
   })
 
   it('clears a row assignee inline without opening the detail sheet', async () => {
@@ -217,29 +233,59 @@ describe('App', () => {
     expect(within(card).getByLabelText(/via rad: kasper dahl/i)).toBeInTheDocument()
   })
 
+  it('removes a row from the detail sheet and closes the sheet', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i }))
+
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /^fjern rad$/i }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText('0 rader')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /åpne detaljer for kaspers vikartimer/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /opprett ny rad/i })).toBeInTheDocument()
+  })
+
   it('assigns row responsibility from the detail sheet and supports undo', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /åpne detaljer for camillas timer/i }))
+    await user.click(screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i }))
 
     const dialog = screen.getByRole('dialog')
-    await user.selectOptions(within(dialog).getByLabelText('Vikar'), 'sub-kasper')
+    await user.selectOptions(within(dialog).getByLabelText('Vikar'), 'sub-ida')
     await user.click(within(dialog).getByRole('button', { name: /lagre radansvar/i }))
     await user.click(within(dialog).getByRole('button', { name: /lukk/i }))
 
     expect(
-      screen.queryByRole('button', { name: /åpne detaljer for camillas timer/i }),
+      screen.queryByRole('button', { name: /åpne detaljer for kaspers vikartimer/i }),
     ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /åpne detaljer for idas vikartimer/i }),
+    ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^angre$/i }))
 
     expect(
-      screen.getByRole('button', { name: /åpne detaljer for camillas timer/i }),
+      screen.getByRole('button', { name: /åpne detaljer for kaspers vikartimer/i }),
     ).toBeInTheDocument()
   })
 
-  it('moves an unscheduled card through the detail sheet and returns it with undo', async () => {
+  it('creates a new row from the dedicated placeholder', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /opprett ny rad/i }))
+
+    expect(screen.getByText('2 rader')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /åpne detaljer for ledig rad/i })).toBeInTheDocument()
+  })
+
+  it('requires explicit confirmation before a detail-sheet time change affects placement', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -248,8 +294,20 @@ describe('App', () => {
     await user.click(within(tasksPanel).getByLabelText(/kort samfunnsfag 8c/i))
 
     const dialog = screen.getByRole('dialog')
-    await user.selectOptions(within(dialog).getByLabelText('Rad'), 'row-3')
-    await user.selectOptions(within(dialog).getByLabelText('Tid'), '08:30')
+    await user.selectOptions(within(dialog).getByLabelText('Tidspunkt'), '13:30')
+    await user.selectOptions(within(dialog).getByLabelText('Rad'), 'row-1')
+
+    expect(
+      within(dialog).getByRole('button', { name: /lagre plassering/i }),
+    ).toBeDisabled()
+
+    await user.click(within(dialog).getByRole('button', { name: /bekreft tidspunkt/i }))
+    await user.selectOptions(within(dialog).getByLabelText('Rad'), 'row-1')
+
+    expect(
+      within(dialog).getByRole('button', { name: /lagre plassering/i }),
+    ).toBeEnabled()
+
     await user.click(within(dialog).getByRole('button', { name: /lagre plassering/i }))
     await user.click(within(dialog).getByRole('button', { name: /lukk/i }))
 

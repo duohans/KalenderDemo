@@ -4,6 +4,7 @@ import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
 import { selectCellNeedCardIdMap } from '../../domain/schedule/selectors.ts'
 import type { PlannerDragItem } from '../../domain/schedule/dnd.ts'
 import { useScheduleState } from '../schedule/useSchedule.ts'
+import { NewRowPlaceholder } from './NewRowPlaceholder.tsx'
 import { RowLane } from './RowLane.tsx'
 import { TimeHeader } from './TimeHeader.tsx'
 
@@ -15,6 +16,7 @@ type CalendarGridProps = {
 export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
   const rowOrder = useScheduleState((state) => state.rowOrder)
   const cellNeedCardMap = useScheduleState((state) => selectCellNeedCardIdMap(state))
+  const rowCountLabel = `${rowOrder.length} ${rowOrder.length === 1 ? 'rad' : 'rader'}`
 
   return (
     <section
@@ -34,7 +36,7 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
             </span>
             <span className="planner-chip planner-chip--board">
               <Layers3 size={15} strokeWidth={2.1} aria-hidden="true" />
-              {rowOrder.length} rader
+              {rowCountLabel}
             </span>
           </div>
         </div>
@@ -58,6 +60,7 @@ export function CalendarGrid({ activeDrag, dayLabel }: CalendarGridProps) {
                   activeDrag={activeDrag}
                 />
               ))}
+              <NewRowPlaceholder activeDrag={activeDrag} />
             </div>
           </div>
         </div>

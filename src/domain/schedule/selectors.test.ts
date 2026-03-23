@@ -18,29 +18,36 @@ describe('schedule selectors', () => {
     const state = createSeedPlannerState()
 
     expect(selectRowTitle(state, 'row-1')).toEqual({
-      full: 'Camillas timer',
-      compact: 'Camillas timer',
-    })
-
-    expect(selectRowTitle(state, 'row-2')).toEqual({
       full: 'Kaspers vikartimer',
       compact: 'Kaspers vikartimer',
     })
 
-    expect(selectRowTitle(state, 'row-4')).toEqual({
-      full: 'Idas vikartimer',
-      compact: 'Idas vikartimer',
+    const teacherDrivenState = {
+      ...state,
+      rows: {
+        ...state.rows,
+        'row-1': {
+          ...state.rows['row-1'],
+          rowResponsibleId: null,
+        },
+      },
+    }
+
+    expect(selectRowTitle(teacherDrivenState, 'row-1')).toEqual({
+      full: 'Camillas & Jespers timer',
+      compact: 'Camillas & Jespers timer',
     })
 
     const threeTeacherState = {
-      ...state,
+      ...teacherDrivenState,
       needCards: {
-        ...state.needCards,
+        ...teacherDrivenState.needCards,
         'card-extra-jesper': {
           id: 'card-extra-jesper',
           title: 'Historie 7A',
           subtitle: 'Rom 202',
           sourceTeacherId: 'teacher-jesper',
+          allocatedTimeBlockId: '08:30' as const,
           placement: 'scheduled' as const,
           rowId: 'row-1',
           timeBlockId: '08:30' as const,
@@ -52,14 +59,15 @@ describe('schedule selectors', () => {
           title: 'Samfunn 7A',
           subtitle: 'Rom 203',
           sourceTeacherId: 'teacher-nora',
+          allocatedTimeBlockId: '13:30' as const,
           placement: 'scheduled' as const,
           rowId: 'row-1',
-          timeBlockId: '11:30' as const,
+          timeBlockId: '13:30' as const,
           explicitAssigneeId: null,
           accentColor: '#cfe6ff',
         },
       },
-      needCardOrder: [...state.needCardOrder, 'card-extra-jesper', 'card-extra-nora'],
+      needCardOrder: [...teacherDrivenState.needCardOrder, 'card-extra-jesper', 'card-extra-nora'],
     }
 
     expect(selectRowTitle(threeTeacherState, 'row-1')).toEqual({
@@ -72,15 +80,15 @@ describe('schedule selectors', () => {
     const state = createSeedPlannerState()
 
     expect(selectEffectiveAssigneeId(state, 'card-naturfag-7b')).toBe('sub-sara')
-    expect(selectEffectiveAssigneeId(state, 'card-engelsk-7b')).toBe('sub-kasper')
+    expect(selectEffectiveAssigneeId(state, 'card-matte-6a')).toBe('sub-kasper')
   })
 
   it('builds compact row and card display models for the UI layer', () => {
     const state = createSeedPlannerState()
 
-    expect(selectRowDisplayModel(state, 'row-2')).toMatchObject({
+    expect(selectRowDisplayModel(state, 'row-1')).toMatchObject({
       rowAccent: '#ffd38b',
-      secondaryLabel: '2 timer',
+      secondaryLabel: '5 timer',
       title: {
         compact: 'Kaspers vikartimer',
       },
@@ -89,6 +97,7 @@ describe('schedule selectors', () => {
     expect(selectNeedCardDisplayModel(state, 'card-naturfag-7b')).toMatchObject({
       classLabel: '7B',
       subjectLabel: 'Naturfag',
+      allocatedTimeLabel: '10:30-11:30',
       teacherAccent: '#ffd8bc',
       rowAccent: '#ffd38b',
       assignmentMode: 'explicit',
@@ -120,12 +129,30 @@ describe('schedule selectors', () => {
     expect(selectNeedCardConflict(invalidState, 'card-matte-6a')).toBe(true)
   })
 
+  it('marks scheduled cards with a mismatched allocated time as conflicts', () => {
+    const state = createSeedPlannerState()
+    const invalidState = {
+      ...state,
+      needCards: {
+        ...state.needCards,
+        'card-musikk-8c': {
+          ...state.needCards['card-musikk-8c'],
+          placement: 'scheduled' as const,
+          rowId: 'row-1',
+          timeBlockId: '09:30' as const,
+        },
+      },
+    }
+
+    expect(selectNeedCardConflict(invalidState, 'card-musikk-8c')).toBe(true)
+  })
+
   it('memoizes scheduled cell and row derivations for the same state object', () => {
     const state = createSeedPlannerState()
 
     expect(selectCellNeedCardIdMap(state)).toBe(selectCellNeedCardIdMap(state))
-    expect(selectRowCards(state, 'row-2')).toBe(selectRowCards(state, 'row-2'))
-    expect(selectRowDisplayModel(state, 'row-2')).toBe(selectRowDisplayModel(state, 'row-2'))
+    expect(selectRowCards(state, 'row-1')).toBe(selectRowCards(state, 'row-1'))
+    expect(selectRowDisplayModel(state, 'row-1')).toBe(selectRowDisplayModel(state, 'row-1'))
     expect(selectNeedCardDisplayModel(state, 'card-naturfag-7b')).toBe(
       selectNeedCardDisplayModel(state, 'card-naturfag-7b'),
     )
@@ -137,23 +164,23 @@ describe('schedule selectors', () => {
 
     expect(summary).toMatchObject({
       total: 12,
-      scheduled: 8,
-      unscheduled: 4,
+      scheduled: 5,
+      unscheduled: 7,
       coveredCards: 6,
       coverageRate: 0.5,
       unassignedCards: 6,
       explicitOverrides: 3,
-      rowAssignments: 2,
+      rowAssignments: 1,
       substituteCount: 5,
     })
 
     expect(summary.unassignedItems.map((item) => item.title)).toEqual([
-      'Matematikk 6A',
-      'Musikk 8C',
-      'KRLE 9A',
-      'Kroppsøving 4B',
-      'Mat og helse 6C',
+      'Engelsk 7B',
       'Samfunnsfag 8C',
+      'Kroppsøving 4B',
+      'Musikk 8C',
+      'Mat og helse 6C',
+      'KRLE 9A',
     ])
   })
 
@@ -163,19 +190,19 @@ describe('schedule selectors', () => {
 
     expect(workloads[0]).toMatchObject({
       substitute: {
-        id: 'sub-ida',
+        id: 'sub-kasper',
       },
-      effectiveCoverageCount: 2,
+      effectiveCoverageCount: 3,
       rowAssignments: 1,
       explicitOverrides: 0,
     })
 
     expect(workloads.map((workload) => workload.substitute.id)).toEqual([
-      'sub-ida',
-      'sub-emma',
       'sub-kasper',
+      'sub-emma',
       'sub-sara',
       'sub-tarik',
+      'sub-ida',
     ])
   })
 })

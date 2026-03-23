@@ -59,6 +59,7 @@ const needCardBaseSchema = z.object({
   title: z.string(),
   subtitle: z.string(),
   sourceTeacherId: z.string().min(1),
+  allocatedTimeBlockId: timeBlockIdSchema,
   explicitAssigneeId: z.string().min(1).nullable(),
   accentColor: z.string().min(1),
 })
@@ -75,10 +76,20 @@ const unscheduledNeedCardSchema = needCardBaseSchema.extend({
   timeBlockId: z.null(),
 })
 
-export const needCardSchema = z.union([
-  scheduledNeedCardSchema,
-  unscheduledNeedCardSchema,
-]) satisfies z.ZodType<NeedCard>
+export const needCardSchema: z.ZodType<NeedCard> = z
+  .union([scheduledNeedCardSchema, unscheduledNeedCardSchema])
+  .superRefine((card, ctx) => {
+    if (
+      card.placement === 'scheduled' &&
+      card.timeBlockId !== card.allocatedTimeBlockId
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Scheduled cards must match their allocated time block',
+        path: ['timeBlockId'],
+      })
+    }
+  })
 
 export const plannerStateSchema = z
   .object({
@@ -133,7 +144,11 @@ export const plannerStateSchema = z
         })
       }
 
-      if (card.placement === 'scheduled' && !state.rows[card.rowId]) {
+      if (
+        card.placement === 'scheduled' &&
+        typeof card.rowId === 'string' &&
+        !state.rows[card.rowId]
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: `Unknown rowId "${card.rowId}"`,
@@ -142,4 +157,3 @@ export const plannerStateSchema = z
       }
     })
   }) satisfies z.ZodType<PlannerState>
-

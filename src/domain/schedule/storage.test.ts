@@ -15,11 +15,11 @@ afterEach(() => {
 describe('planner storage', () => {
   it('loads a saved planner document from localStorage', () => {
     const state = createSeedPlannerState()
-    state.needCards['card-samfunn-8c'] = {
-      ...state.needCards['card-samfunn-8c'],
+    state.needCards['card-krle-9a'] = {
+      ...state.needCards['card-krle-9a'],
       placement: 'scheduled',
-      rowId: 'row-3',
-      timeBlockId: '08:30',
+      rowId: 'row-1',
+      timeBlockId: '13:30',
     }
 
     savePlannerState(state)
@@ -47,5 +47,25 @@ describe('planner storage', () => {
     })
 
     expect(migrated).toBeNull()
+  })
+
+  it('migrates version 3 documents by inferring allocated time blocks', () => {
+    const state = createSeedPlannerState()
+    const { allocatedTimeBlockId: _, ...legacyScheduledCard } = state.needCards['card-matte-6a']
+    const { allocatedTimeBlockId: __, ...legacyUnscheduledCard } =
+      state.needCards['card-samfunn-8c']
+
+    const migrated = migrateStoredPlannerState({
+      ...state,
+      version: 3,
+      needCards: {
+        ...state.needCards,
+        'card-matte-6a': legacyScheduledCard,
+        'card-samfunn-8c': legacyUnscheduledCard,
+      },
+    })
+
+    expect(migrated?.needCards['card-matte-6a'].allocatedTimeBlockId).toBe('08:30')
+    expect(migrated?.needCards['card-samfunn-8c'].allocatedTimeBlockId).toBe('08:30')
   })
 })

@@ -67,7 +67,7 @@ export function TasksPanel({ activeDrag }: TasksPanelProps) {
         )}
         title="Dra et kort hit for å sende det tilbake til verktøyfeltet"
       >
-        <div className="panel-scroll flex flex-col gap-2.5">
+        <div className="panel-scroll panel-scroll--compact flex flex-col">
           {!isEmpty ? (
             visibleCardIds.map((cardId) => (
               <TaskCard

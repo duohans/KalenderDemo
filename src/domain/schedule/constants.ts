@@ -1,7 +1,7 @@
 import type { TimeBlock, TimeBlockId } from './types.ts'
 
 export const STORAGE_KEY = 'substitute-planner:v2'
-export const STORAGE_VERSION = 3
+export const STORAGE_VERSION = 4
 
 export const TIME_BLOCKS = [
   { id: '08:30', label: '08:30-09:30', start: '08:30', end: '09:30' },

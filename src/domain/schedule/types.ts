@@ -31,6 +31,7 @@ export type NeedCard = {
   title: string
   subtitle: string
   sourceTeacherId: string
+  allocatedTimeBlockId: TimeBlockId
   placement: 'unscheduled' | 'scheduled'
   rowId: string | null
   timeBlockId: TimeBlockId | null
@@ -66,6 +67,19 @@ export type PlannerState = {
 }
 
 export type PlannerAction =
+  | {
+      type: 'createRow'
+      cardId?: string
+    }
+  | {
+      type: 'removeRow'
+      rowId: string
+    }
+  | {
+      type: 'updateNeedCardAllocatedTimeBlock'
+      cardId: string
+      timeBlockId: TimeBlockId
+    }
   | {
       type: 'moveNeedCardToCell'
       cardId: string

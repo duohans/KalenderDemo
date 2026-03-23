@@ -57,6 +57,12 @@ function describeMotionEvent(event: PlannerMotionEvent | null) {
   }
 
   switch (event.type) {
+    case 'createRow':
+      return event.cardId ? 'Ny rad opprettet og kort plassert.' : 'Ny rad opprettet.'
+    case 'removeRow':
+      return 'Rad fjernet.'
+    case 'updateNeedCardAllocatedTimeBlock':
+      return `Opprinnelig tidspunkt oppdatert til ${event.timeBlockId}.`
     case 'assignSubstituteToNeedCard':
       return 'Direkte vikartildeling lagret.'
     case 'assignSubstituteToRow':

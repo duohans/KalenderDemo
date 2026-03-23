@@ -5,6 +5,19 @@ import type { PlannerAction, TimeBlockId } from '../../domain/schedule/types.ts'
 
 export type PlannerMotionEventBase =
   | {
+      type: 'createRow'
+      cardId?: string
+    }
+  | {
+      type: 'removeRow'
+      rowId: string
+    }
+  | {
+      type: 'updateNeedCardAllocatedTimeBlock'
+      cardId: string
+      timeBlockId: TimeBlockId
+    }
+  | {
       type: 'assignSubstituteToRow'
       rowId: string
       substituteId: string
@@ -54,8 +67,11 @@ export function actionToMotionEvent(
   action: PlannerAction,
 ): PlannerMotionEventBase | null {
   switch (action.type) {
+    case 'createRow':
+    case 'removeRow':
     case 'assignSubstituteToRow':
     case 'assignSubstituteToNeedCard':
+    case 'updateNeedCardAllocatedTimeBlock':
     case 'moveNeedCardToCell':
     case 'moveNeedCardToUnscheduled':
     case 'clearRowResponsible':

@@ -17,13 +17,13 @@ describe('planner drag and drop rules', () => {
       from: { type: 'unscheduled-panel' },
     })
 
-    expect(createNeedCardDragItem(state.needCards['card-engelsk-7b'])).toEqual({
+    expect(createNeedCardDragItem(state.needCards['card-norsk-6a'])).toEqual({
       type: 'need-card',
-      cardId: 'card-engelsk-7b',
+      cardId: 'card-norsk-6a',
       from: {
         type: 'calendar-cell',
-        rowId: 'row-2',
-        timeBlockId: '08:30',
+        rowId: 'row-1',
+        timeBlockId: '09:30',
       },
     })
   })
@@ -48,21 +48,61 @@ describe('planner drag and drop rules', () => {
     ).toBeNull()
   })
 
-  it('maps valid drag and drop combinations directly to reducer actions', () => {
+  it('rejects need-card drops in the wrong time column', () => {
+    const state = createSeedPlannerState()
+    const dragItem = createNeedCardDragItem(state.needCards['card-samfunn-8c'])
+
+    expect(
+      canDropOnTarget(state, dragItem, {
+        type: 'calendar-cell',
+        rowId: 'row-1',
+        timeBlockId: '09:30',
+      }),
+    ).toBe(false)
+
+    expect(
+      resolveDrop(state, dragItem, {
+        type: 'calendar-cell',
+        rowId: 'row-1',
+        timeBlockId: '09:30',
+      }),
+    ).toBeNull()
+  })
+
+  it('autoplaces need cards when dropped on an existing row header', () => {
+    const state = createSeedPlannerState()
+
+    expect(
+      resolveDrop(
+        state,
+        createNeedCardDragItem(state.needCards['card-krle-9a']),
+        { type: 'row-header', rowId: 'row-1' },
+      ),
+    ).toEqual({
+      type: 'moveNeedCardToCell',
+      cardId: 'card-krle-9a',
+      rowId: 'row-1',
+      timeBlockId: '13:30',
+    })
+  })
+
+  it('creates a new row when a need card is dropped on the row placeholder', () => {
     const state = createSeedPlannerState()
 
     expect(
       resolveDrop(
         state,
         createNeedCardDragItem(state.needCards['card-samfunn-8c']),
-        { type: 'calendar-cell', rowId: 'row-3', timeBlockId: '08:30' },
+        { type: 'new-row-placeholder' },
       ),
     ).toEqual({
-      type: 'moveNeedCardToCell',
+      type: 'createRow',
       cardId: 'card-samfunn-8c',
-      rowId: 'row-3',
-      timeBlockId: '08:30',
     })
+  })
+
+  it('maps valid substitute drag and drop combinations directly to reducer actions', () => {
+    const state = createSeedPlannerState()
 
     expect(
       resolveDrop(

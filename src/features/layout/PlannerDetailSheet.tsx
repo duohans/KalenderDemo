@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { TIME_BLOCKS } from '../../domain/schedule/constants.ts'
 import {
+  selectCanPlaceNeedCardInCell,
   selectCanDropNeedCardInCell,
   selectEffectiveNeedCardAssignee,
   selectNeedCardAssignmentMode,
@@ -65,12 +66,30 @@ function NeedCardDetailContent({
   const [selectedRowId, setSelectedRowId] = useState<string>(
     card?.placement === 'scheduled' && card.rowId ? card.rowId : UNSCHEDULED_ROW_ID,
   )
-  const [selectedTimeBlockId, setSelectedTimeBlockId] = useState<TimeBlockId | ''>(
-    card?.timeBlockId ?? '',
+  const [selectedAllocatedTimeBlockId, setSelectedAllocatedTimeBlockId] = useState<TimeBlockId>(
+    card?.allocatedTimeBlockId ?? TIME_BLOCKS[0].id,
   )
   const [selectedCardAssigneeId, setSelectedCardAssigneeId] = useState(
     card?.explicitAssigneeId ?? '',
   )
+
+  useEffect(() => {
+    if (!card) {
+      return
+    }
+
+    setSelectedRowId(
+      card.placement === 'scheduled' && card.rowId ? card.rowId : UNSCHEDULED_ROW_ID,
+    )
+    setSelectedAllocatedTimeBlockId(card.allocatedTimeBlockId)
+    setSelectedCardAssigneeId(card.explicitAssigneeId ?? '')
+  }, [
+    card?.allocatedTimeBlockId,
+    card?.explicitAssigneeId,
+    card?.placement,
+    card?.rowId,
+    card?.id,
+  ])
 
   if (!card) {
     return null
@@ -85,16 +104,16 @@ function NeedCardDetailContent({
   const isMovingToUnscheduled = selectedRowId === UNSCHEDULED_ROW_ID
   const selectedCellAvailable =
     !isMovingToUnscheduled &&
-    selectedTimeBlockId !== '' &&
-    selectCanDropNeedCardInCell(state, card.id, selectedRowId, selectedTimeBlockId)
+    selectCanDropNeedCardInCell(state, card.id, selectedRowId, card.allocatedTimeBlockId)
   const placementChanged = isMovingToUnscheduled
     ? card.placement !== 'unscheduled'
-    : card.placement !== 'scheduled' ||
-      card.rowId !== selectedRowId ||
-      card.timeBlockId !== selectedTimeBlockId
-  const canApplyPlacement =
-    placementChanged &&
-    (isMovingToUnscheduled || (selectedTimeBlockId !== '' && selectedCellAvailable))
+    : card.placement !== 'scheduled' || card.rowId !== selectedRowId
+  const canApplyPlacement = placementChanged && (isMovingToUnscheduled || selectedCellAvailable)
+  const allocatedTimeChanged = card.allocatedTimeBlockId !== selectedAllocatedTimeBlockId
+  const currentRowCanKeepCardAtNextTime =
+    card.placement === 'scheduled' &&
+    card.rowId !== null &&
+    selectCanPlaceNeedCardInCell(state, card.id, card.rowId, selectedAllocatedTimeBlockId)
   const assigneeChanged = (card.explicitAssigneeId ?? '') !== selectedCardAssigneeId
   const canApplyAssignee =
     assigneeChanged && (selectedCardAssigneeId !== '' || card.explicitAssigneeId !== null)
@@ -133,14 +152,72 @@ function NeedCardDetailContent({
         </div>
         <div className="detail-sheet__facts">
           <div>
-            <p className="panel-kicker">Tid</p>
-            <p className="detail-sheet__lead">{getTimeBlockLabel(card.timeBlockId)}</p>
+            <p className="panel-kicker">Opprinnelig tid</p>
+            <p className="detail-sheet__lead">
+              {getTimeBlockLabel(card.allocatedTimeBlockId)}
+            </p>
           </div>
           <div>
             <p className="panel-kicker">Rad</p>
             <p className="detail-sheet__lead">
               {card.placement === 'scheduled' ? rowTitle?.compact ?? 'Rad' : 'Uplanlagt'}
             </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-sheet__block">
+        <div className="detail-sheet__section-head">
+          <Clock3 aria-hidden="true" size={16} strokeWidth={2.25} />
+          <p className="panel-kicker">Endre tidspunkt</p>
+        </div>
+        <div className="detail-sheet__controls">
+          <div className="detail-sheet__field">
+            <label htmlFor="detail-card-allocated-time">Tidspunkt</label>
+            <select
+              id="detail-card-allocated-time"
+              value={selectedAllocatedTimeBlockId}
+              onChange={(event) =>
+                setSelectedAllocatedTimeBlockId(event.target.value as TimeBlockId)
+              }
+            >
+              {TIME_BLOCKS.map((block) => (
+                <option key={block.id} value={block.id}>
+                  {block.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {!allocatedTimeChanged ? (
+            <p className="detail-sheet__hint">
+              Kortet kan bare planlegges i {getTimeBlockLabel(card.allocatedTimeBlockId)}.
+            </p>
+          ) : card.placement === 'scheduled' && card.rowId && !currentRowCanKeepCardAtNextTime ? (
+            <p className="detail-sheet__hint detail-sheet__hint--danger">
+              Den nye tiden er opptatt i dagens rad. Kortet sendes til Uplanlagt når du bekrefter.
+            </p>
+          ) : (
+            <p className="detail-sheet__hint">
+              Tidspunktendring bekreftes separat fra vanlig plassering.
+            </p>
+          )}
+
+          <div className="detail-sheet__actions">
+            <button
+              type="button"
+              className="action-button action-button--primary"
+              disabled={!allocatedTimeChanged}
+              onClick={() =>
+                runAction({
+                  type: 'updateNeedCardAllocatedTimeBlock',
+                  cardId: card.id,
+                  timeBlockId: selectedAllocatedTimeBlockId,
+                })
+              }
+            >
+              Bekreft tidspunkt
+            </button>
           </div>
         </div>
       </div>
@@ -156,14 +233,7 @@ function NeedCardDetailContent({
             <select
               id="detail-card-row"
               value={selectedRowId}
-              onChange={(event) => {
-                const nextRowId = event.target.value
-                setSelectedRowId(nextRowId)
-
-                if (nextRowId === UNSCHEDULED_ROW_ID) {
-                  setSelectedTimeBlockId('')
-                }
-              }}
+              onChange={(event) => setSelectedRowId(event.target.value)}
             >
               <option value={UNSCHEDULED_ROW_ID}>Uplanlagt</option>
               {state.rowOrder.map((rowId) => (
@@ -174,28 +244,13 @@ function NeedCardDetailContent({
             </select>
           </div>
 
-          <div className="detail-sheet__field">
-            <label htmlFor="detail-card-time">Tid</label>
-            <select
-              id="detail-card-time"
-              value={selectedTimeBlockId}
-              onChange={(event) => setSelectedTimeBlockId(event.target.value as TimeBlockId | '')}
-              disabled={selectedRowId === UNSCHEDULED_ROW_ID}
-            >
-              <option value="">Velg tidspunkt</option>
-              {TIME_BLOCKS.map((block) => (
-                <option key={block.id} value={block.id}>
-                  {block.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <p className="detail-sheet__hint">
+            Kortet kan bare lagres i tidskolonnen {getTimeBlockLabel(card.allocatedTimeBlockId)}.
+          </p>
 
-          {selectedRowId !== UNSCHEDULED_ROW_ID &&
-          selectedTimeBlockId !== '' &&
-          !selectedCellAvailable ? (
+          {selectedRowId !== UNSCHEDULED_ROW_ID && !selectedCellAvailable ? (
             <p className="detail-sheet__hint detail-sheet__hint--danger">
-              Den valgte cellen er allerede opptatt.
+              Den valgte raden er allerede opptatt på kortets tidspunkt.
             </p>
           ) : null}
 
@@ -217,15 +272,11 @@ function NeedCardDetailContent({
                   return
                 }
 
-                if (!selectedTimeBlockId) {
-                  return
-                }
-
                 runAction({
                   type: 'moveNeedCardToCell',
                   cardId: card.id,
                   rowId: selectedRowId,
-                  timeBlockId: selectedTimeBlockId,
+                  timeBlockId: card.allocatedTimeBlockId,
                 })
               }}
             >
@@ -326,11 +377,13 @@ function NeedCardDetailContent({
 }
 
 function RowDetailContent({
+  closeSelection,
   openSelection,
   rowId,
   runAction,
   state,
 }: {
+  closeSelection: () => void
   openSelection: (selection: { kind: 'need-card'; cardId: string }) => void
   rowId: string
   runAction: (action: PlannerAction) => void
@@ -416,6 +469,19 @@ function RowDetailContent({
               }
             >
               Fjern radansvar
+            </button>
+            <button
+              type="button"
+              className="action-button action-button--outline"
+              onClick={() => {
+                runAction({
+                  type: 'removeRow',
+                  rowId: row.id,
+                })
+                closeSelection()
+              }}
+            >
+              Fjern rad
             </button>
           </div>
         </div>
@@ -617,6 +683,7 @@ export function PlannerDetailSheet() {
           ) : (
             <RowDetailContent
               key={selection.rowId}
+              closeSelection={closeSelection}
               openSelection={openSelection}
               rowId={selection.rowId}
               runAction={runAction}

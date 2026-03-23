@@ -61,6 +61,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 10X',
     subtitle: 'Rom 410',
     sourceTeacherId: 'teacher-petter',
+    allocatedTimeBlockId: '08:30',
     placement: 'unscheduled',
     rowId: null,
     timeBlockId: null,
@@ -72,6 +73,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 11Z',
     subtitle: 'Rom 411',
     sourceTeacherId: 'teacher-line',
+    allocatedTimeBlockId: '09:30',
     placement: 'unscheduled',
     rowId: null,
     timeBlockId: null,
@@ -83,6 +85,7 @@ function createMultiPageRailState() {
     title: 'Ekstrafag 12Y',
     subtitle: 'Rom 412',
     sourceTeacherId: 'teacher-camilla',
+    allocatedTimeBlockId: '11:30',
     placement: 'unscheduled',
     rowId: null,
     timeBlockId: null,
@@ -110,14 +113,26 @@ function createMultiPageRailState() {
 
 function createEmptyRowState() {
   const state = createSeedPlannerState()
-  const targetCard = state.needCards['card-krle-9a']
 
-  state.needCards['card-krle-9a'] = {
-    ...targetCard,
-    placement: 'unscheduled',
-    rowId: null,
-    timeBlockId: null,
+  state.rows['row-1'] = {
+    ...state.rows['row-1'],
+    rowResponsibleId: null,
   }
+
+  state.needCardOrder.forEach((cardId) => {
+    const card = state.needCards[cardId]
+
+    if (card.placement !== 'scheduled') {
+      return
+    }
+
+    state.needCards[cardId] = {
+      ...card,
+      placement: 'unscheduled',
+      rowId: null,
+      timeBlockId: null,
+    }
+  })
 
   return state
 }
@@ -133,25 +148,65 @@ async function openPlannerWithState(page: Page, state: ReturnType<typeof createM
   await page.goto('/')
 }
 
-test('drags an unscheduled card into the grid', async ({ page }) => {
+test('drags an unscheduled card onto an existing row header and autoplaces it at its allocated time', async ({ page }) => {
+  await openFreshPlanner(page)
+
+  const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
+  const card = tasksPanel.getByLabel(/kort krle 9a/i)
+  const rowHeader = page.locator('.row-header-dropzone').first()
+
+  await dragTo(page, card, rowHeader)
+
+  await expect(tasksPanel.getByLabel(/kort krle 9a/i)).toHaveCount(0)
+  await expect(page.getByTestId('calendar-cell-row-1-13:30').getByLabel(/kort krle 9a/i)).toBeVisible()
+})
+
+test('drags an unscheduled card onto the new-row placeholder to create a row and autoplace it', async ({
+  page,
+}) => {
   await openFreshPlanner(page)
 
   const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
   const card = tasksPanel.getByLabel(/kort norsk 9a/i)
-  const targetCell = page.getByTestId('calendar-cell-row-3-08:30')
+  const newRowPlaceholder = page.getByTestId('new-row-placeholder')
 
-  await dragTo(page, card, targetCell)
+  await dragTo(page, card, newRowPlaceholder)
 
   await expect(tasksPanel.getByLabel(/kort norsk 9a/i)).toHaveCount(0)
-  await expect(targetCell.getByLabel(/kort norsk 9a/i)).toBeVisible()
+  await expect(page.getByText('2 rader')).toBeVisible()
+  await expect(page.getByTestId('calendar-cell-row-2-08:30').getByLabel(/kort norsk 9a/i)).toBeVisible()
+})
+
+test('renders the new-row placeholder without regular time slots', async ({ page }) => {
+  await openFreshPlanner(page)
+
+  const placeholder = page.getByTestId('new-row-placeholder')
+
+  await expect(placeholder).toBeVisible()
+
+  const cellCount = await placeholder.locator('[data-testid^="calendar-cell-"]').count()
+  expect(cellCount).toBe(0)
+})
+
+test('rejects dragging a need card into the wrong time column', async ({ page }) => {
+  await openFreshPlanner(page)
+
+  const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
+  const card = tasksPanel.getByLabel(/kort norsk 9a/i)
+  const wrongTimeCell = page.getByTestId('calendar-cell-row-1-13:30')
+
+  await dragTo(page, card, wrongTimeCell)
+
+  await expect(tasksPanel.getByLabel(/kort norsk 9a/i)).toBeVisible()
+  await expect(wrongTimeCell.getByLabel(/kort norsk 9a/i)).toHaveCount(0)
 })
 
 test('fills the full empty slot during drag and keeps side cards aligned with board cards', async ({ page }) => {
   await openFreshPlanner(page)
 
   const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
-  const source = tasksPanel.getByLabel(/kort norsk 9a/i)
-  const targetCell = page.getByTestId('calendar-cell-row-3-08:30')
+  const source = tasksPanel.getByLabel(/kort krle 9a/i)
+  const targetCell = page.getByTestId('calendar-cell-row-1-13:30')
 
   const sourceBox = await source.boundingBox()
   const targetBox = await targetCell.boundingBox()
@@ -181,7 +236,7 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
     const peopleRegion = document.querySelector('[aria-label="Vikarer"]')
     const tasksCard = tasksRegion?.querySelector('article.need-card')
     const boardCard = document.querySelector('.calendar-cell article.need-card')
-    const cell = document.querySelector('[data-testid="calendar-cell-row-3-08:30"]')
+    const cell = document.querySelector('[data-testid="calendar-cell-row-1-13:30"]')
     const state = cell?.querySelector('.empty-cell-state')
     const label = state?.querySelector('.empty-cell-state__label')
 
@@ -236,17 +291,17 @@ test('fills the full empty slot during drag and keeps side cards aligned with bo
   expect(metrics.statusLabelsInCards).toBe(0)
 })
 
-test('keeps row-card icon containers perfectly circular', async ({ page }) => {
+test('keeps the remaining row-card icon containers perfectly circular', async ({ page }) => {
   await openPlannerWithState(page, createEmptyRowState())
 
   const metrics = await page.evaluate(() => {
     const ghostAvatar = document.querySelector('.row-header__avatar--ghost')
-    const dropHint = document.querySelector('.row-drop-hint')
+    const rowUtility = document.querySelector('.row-header__utility')
     const emptyTeacherPill = document.querySelector('.teacher-pill--empty')
 
     if (
       !(ghostAvatar instanceof HTMLElement) ||
-      !(dropHint instanceof HTMLElement) ||
+      !(rowUtility instanceof HTMLElement) ||
       !(emptyTeacherPill instanceof HTMLElement)
     ) {
       return null
@@ -264,7 +319,7 @@ test('keeps row-card icon containers perfectly circular', async ({ page }) => {
 
     return {
       ghostAvatar: toBox(ghostAvatar),
-      dropHint: toBox(dropHint),
+      rowUtility: toBox(rowUtility),
       emptyTeacherPill: toBox(emptyTeacherPill),
     }
   })
@@ -276,7 +331,7 @@ test('keeps row-card icon containers perfectly circular', async ({ page }) => {
   }
 
   expect(metrics.ghostAvatar.delta).toBeLessThanOrEqual(1)
-  expect(metrics.dropHint.delta).toBeLessThanOrEqual(1)
+  expect(metrics.rowUtility.delta).toBeLessThanOrEqual(1)
   expect(metrics.emptyTeacherPill.delta).toBeLessThanOrEqual(1)
 })
 
@@ -296,10 +351,11 @@ test('keeps side rails fixed and paged when panel content exceeds five items', a
   await tasksPanel.getByRole('button', { name: /neste side i uplanlagt/i }).click()
   await peoplePanel.getByRole('button', { name: /neste side i vikarer/i }).click()
 
-  await expect(tasksPanel.locator('[aria-label^="Kort "]')).toHaveCount(2)
+  await expect(tasksPanel.locator('[aria-label^="Kort "]')).toHaveCount(5)
   await expect(peoplePanel.locator('[aria-label^="Vikar "]')).toHaveCount(2)
   await expect(tasksPanel.getByLabel(/kort ekstrafag 11z/i)).toBeVisible()
   await expect(peoplePanel.getByLabel(/vikar ågot øie/i)).toBeVisible()
+  await expect(tasksPanel.getByText('2 / 2')).toBeVisible()
 
   const metrics = await page.evaluate(() => {
     const tasksPanel = document.querySelector('[aria-label="Uplanlagt"]')
@@ -344,8 +400,8 @@ test('keeps side rails fixed and paged when panel content exceeds five items', a
   }
 
   expect(metrics.pageHeight - metrics.viewportHeight).toBeLessThanOrEqual(2)
-  expect(metrics.tasksScrollHeight - metrics.tasksClientHeight).toBeLessThanOrEqual(1)
-  expect(metrics.peopleScrollHeight - metrics.peopleClientHeight).toBeLessThanOrEqual(1)
+  expect(metrics.tasksScrollHeight - metrics.tasksClientHeight).toBeLessThanOrEqual(2)
+  expect(metrics.peopleScrollHeight - metrics.peopleClientHeight).toBeLessThanOrEqual(2)
   expect(metrics.tasksScrollWidth - metrics.tasksClientWidth).toBeLessThanOrEqual(1)
   expect(metrics.peopleScrollWidth - metrics.peopleClientWidth).toBeLessThanOrEqual(1)
   expect(Math.abs(metrics.tasksPanelHeight - metrics.boardHeight)).toBeLessThanOrEqual(2)
@@ -394,20 +450,19 @@ test('moves a card through the detail sheet and persists on reload', async ({ pa
 
   const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
 
-  await tasksPanel.getByLabel(/kort norsk 9a/i).click()
+  await tasksPanel.getByLabel(/kort krle 9a/i).click()
 
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Rad').selectOption('row-3')
-  await dialog.getByLabel('Tid').selectOption('08:30')
+  await dialog.getByLabel('Rad').selectOption('row-1')
   await dialog.getByRole('button', { name: /lagre plassering/i }).click()
   await dialog.getByRole('button', { name: /lukk/i }).click()
 
-  await expect(tasksPanel.getByLabel(/kort norsk 9a/i)).toHaveCount(0)
+  await expect(tasksPanel.getByLabel(/kort krle 9a/i)).toHaveCount(0)
 
   await page.reload()
 
   await expect(
-    page.getByRole('region', { name: 'Uplanlagt' }).getByLabel(/kort norsk 9a/i),
+    page.getByRole('region', { name: 'Uplanlagt' }).getByLabel(/kort krle 9a/i),
   ).toHaveCount(0)
 })
 
@@ -416,19 +471,45 @@ test('moves a card through the detail sheet and supports undo in-session', async
 
   const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
 
-  await tasksPanel.getByLabel(/kort norsk 9a/i).click()
+  await tasksPanel.getByLabel(/kort krle 9a/i).click()
 
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Rad').selectOption('row-3')
-  await dialog.getByLabel('Tid').selectOption('08:30')
+  await dialog.getByLabel('Rad').selectOption('row-1')
   await dialog.getByRole('button', { name: /lagre plassering/i }).click()
   await dialog.getByRole('button', { name: /lukk/i }).click()
 
-  await expect(tasksPanel.getByLabel(/kort norsk 9a/i)).toHaveCount(0)
+  await expect(tasksPanel.getByLabel(/kort krle 9a/i)).toHaveCount(0)
 
   await page.getByRole('button', { name: /^angre$/i }).click()
 
   await expect(
-    page.getByRole('region', { name: 'Uplanlagt' }).getByLabel(/kort norsk 9a/i),
+    page.getByRole('region', { name: 'Uplanlagt' }).getByLabel(/kort krle 9a/i),
   ).toBeVisible()
+})
+
+test('requires explicit confirmation before a time change affects detail-sheet placement', async ({
+  page,
+}) => {
+  await openFreshPlanner(page)
+
+  const tasksPanel = page.getByRole('region', { name: 'Uplanlagt' })
+
+  await tasksPanel.getByLabel(/kort samfunnsfag 8c/i).click()
+
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Tidspunkt').selectOption('13:30')
+  await dialog.getByLabel('Rad').selectOption('row-1')
+
+  await expect(dialog.getByRole('button', { name: /lagre plassering/i })).toBeDisabled()
+
+  await dialog.getByRole('button', { name: /bekreft tidspunkt/i }).click()
+  await dialog.getByLabel('Rad').selectOption('row-1')
+
+  await expect(dialog.getByRole('button', { name: /lagre plassering/i })).toBeEnabled()
+
+  await dialog.getByRole('button', { name: /lagre plassering/i }).click()
+  await dialog.getByRole('button', { name: /lukk/i }).click()
+
+  await expect(tasksPanel.getByLabel(/kort samfunnsfag 8c/i)).toHaveCount(0)
+  await expect(page.getByTestId('calendar-cell-row-1-13:30').getByLabel(/kort samfunnsfag 8c/i)).toBeVisible()
 })

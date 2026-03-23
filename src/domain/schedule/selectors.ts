@@ -39,6 +39,7 @@ export type NeedCardDisplayModel = {
   teacherAccent: string
   rowAccent: string
   assigneeAccent: string
+  allocatedTimeLabel: string
   statusLabel: string
   statusDetail: string
 }
@@ -442,6 +443,10 @@ export function selectNeedCardConflict(state: PlannerState, cardId: string) {
     return true
   }
 
+  if (card.timeBlockId !== card.allocatedTimeBlockId) {
+    return true
+  }
+
   const row = state.rows[card.rowId]
 
   if (!row) {
@@ -515,6 +520,7 @@ export function selectNeedCardDisplayModel(
     teacherAccent: teacher?.accentColor ?? card.accentColor,
     rowAccent,
     assigneeAccent: effectiveAssignee?.accentColor ?? rowAccent,
+    allocatedTimeLabel: getTimeBlockLabel(card.allocatedTimeBlockId),
     statusLabel,
     statusDetail,
   }
@@ -524,6 +530,40 @@ export function selectNeedCardDisplayModel(
 }
 
 export function selectCanDropNeedCardInCell(
+  state: PlannerState,
+  cardId: string,
+  rowId: string,
+  timeBlockId: TimeBlockId,
+) {
+  const card = state.needCards[cardId]
+
+  if (!card || card.allocatedTimeBlockId !== timeBlockId) {
+    return false
+  }
+
+  return selectCanPlaceNeedCardInCell(state, cardId, rowId, timeBlockId)
+}
+
+export function selectCanDropNeedCardInRow(
+  state: PlannerState,
+  cardId: string,
+  rowId: string,
+) {
+  const card = state.needCards[cardId]
+
+  if (!card) {
+    return false
+  }
+
+  return selectCanDropNeedCardInCell(
+    state,
+    cardId,
+    rowId,
+    card.allocatedTimeBlockId,
+  )
+}
+
+export function selectCanPlaceNeedCardInCell(
   state: PlannerState,
   cardId: string,
   rowId: string,
@@ -584,11 +624,11 @@ export function selectPlannerSummary(state: PlannerState): PlannerSummaryViewMod
         item: {
           id: card.id,
           title: card.title,
-          timeLabel: getTimeBlockLabel(card.timeBlockId),
+          timeLabel: getTimeBlockLabel(card.timeBlockId ?? card.allocatedTimeBlockId),
           rowTitle,
           sourceTeacherName: teacher?.name ?? UNKNOWN_TEACHER_NAME,
         },
-        sortOrder: card.timeBlockId ? TIME_BLOCK_ORDER[card.timeBlockId] : Number.MAX_SAFE_INTEGER,
+        sortOrder: TIME_BLOCK_ORDER[card.timeBlockId ?? card.allocatedTimeBlockId],
       }
     })
     .filter((entry): entry is { item: PlannerSummaryItem; sortOrder: number } => entry !== null)

@@ -19,9 +19,27 @@ describe('planner schemas', () => {
         title: 'Historie 7A',
         subtitle: 'Rom 204',
         sourceTeacherId: 'teacher-camilla',
+        allocatedTimeBlockId: '08:30',
         placement: 'unscheduled',
         rowId: 'row-1',
         timeBlockId: null,
+        explicitAssigneeId: null,
+        accentColor: '#fff1a8',
+      }),
+    ).toThrow()
+  })
+
+  it('rejects scheduled cards whose placed time differs from allocated time', () => {
+    expect(() =>
+      needCardSchema.parse({
+        id: 'card-invalid',
+        title: 'Historie 7A',
+        subtitle: 'Rom 204',
+        sourceTeacherId: 'teacher-camilla',
+        allocatedTimeBlockId: '08:30',
+        placement: 'scheduled',
+        rowId: 'row-1',
+        timeBlockId: '09:30',
         explicitAssigneeId: null,
         accentColor: '#fff1a8',
       }),

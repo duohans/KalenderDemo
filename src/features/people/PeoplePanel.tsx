@@ -44,7 +44,7 @@ export function PeoplePanel({ activeDrag }: PeoplePanelProps) {
         />
       }
     >
-      <div className="panel-scroll flex flex-col gap-2.5">
+      <div className="panel-scroll panel-scroll--compact flex flex-col">
         {visibleWorkloads.map((workload) => (
           <PersonCard
             key={workload.substitute.id}
